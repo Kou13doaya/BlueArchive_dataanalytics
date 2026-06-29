@@ -115,7 +115,6 @@ loader = DataLoader()
 
 import base64
 
-@st.cache_data
 def get_base64_image(image_path):
     if os.path.exists(image_path):
         with open(image_path, "rb") as img_file:
