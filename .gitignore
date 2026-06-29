@@ -1,0 +1,17 @@
+__pycache__/
+*.parquet
+*.pyc
+.env
+.venv/
+env/
+venv/
+.DS_Store
+*.mp4
+*.avi
+*.mkv
+*.jpg
+*.jpeg
+*.png
+# image/ や templates/ はアプリの実行に必要かもしれないので除外しませんが、
+# もしこれらが大量 of OCRテスト画像であれば別途検討してください。
+archive/

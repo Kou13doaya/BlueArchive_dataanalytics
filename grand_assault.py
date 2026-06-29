@@ -1,0 +1,229 @@
+# -*- coding: utf-8 -*-
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# ==========================================
+# 設定：デザイン
+# ==========================================
+BAR_COLOR = '#a0d8ef'
+BG_COLOR = 'white'
+TEXT_COLOR = 'black'
+COMPRESSED_COLOR = '#b0c4de'
+GRID_COLOR = '#cccccc'
+
+# デフォルト設定値
+DEFAULT_SETTINGS = {
+    'High': {'range': [98860000, 121044000], 'compress': 107000000, 'bin': 10000},
+    'Mid': {'range': [46500000, 83784000], 'compress': 69932800, 'bin': 10000},
+    'Low': {'range': [43440000, 46032000], 'compress': 44995200, 'bin': 10000}
+}
+
+def create_single_block_histogram(df_target, settings, block_name):
+    """
+    大決戦の特定スコア帯（ブロック）のヒストグラムデータを生成します。
+    """
+    if df_target.empty:
+        return pd.DataFrame(), 0
+
+    combined_data = []
+
+    range_vals = settings['range']
+    lower_limit = range_vals[0] # End (Min)
+    upper_limit = range_vals[1] # Start (Max)
+    comp_below = settings['compress']
+    bin_size = settings['bin']
+
+    if upper_limit <= lower_limit:
+        return pd.DataFrame(), 0
+
+    # 1. 範囲抽出
+    block_df = df_target[
+        (df_target['score'] < upper_limit) &
+        (df_target['score'] >= lower_limit)
+    ].copy()
+
+    total_in_range = len(block_df)
+
+    if block_df.empty:
+        return pd.DataFrame(), 0
+
+    # 2. Detailed Zone
+    detail_df = block_df[block_df['score'] >= comp_below].copy()
+    if not detail_df.empty:
+        actual_max = detail_df['score'].max()
+        # ビン数の安全チェック（150個以上に増えすぎないよう自動スケーリング）
+        estimated_bins = (actual_max - comp_below) / bin_size
+        if estimated_bins > 150:
+            bin_size = int(np.ceil((actual_max - comp_below) / 150))
+            
+        grid_min = (comp_below // bin_size) * bin_size
+        grid_max = (actual_max // bin_size) * bin_size
+        full_index = range(int(grid_min), int(grid_max) + bin_size, bin_size)
+
+        detail_df['binned'] = (detail_df['score'] // bin_size) * bin_size
+        counts = detail_df['binned'].value_counts()
+        counts_filled = counts.reindex(full_index, fill_value=0).sort_index(ascending=True)
+
+        for score, count in counts_filled.items():
+            if score < comp_below:
+                continue
+            combined_data.append({
+                'label': f"{score:,}",
+                'count': count,
+                'type': 'detail',
+                'sort_key': score,
+                'color': BAR_COLOR,
+                'group': block_name
+            })
+
+    # 3. Compressed Zone
+    compressed_df = block_df[block_df['score'] < comp_below]
+    if not compressed_df.empty:
+        count = len(compressed_df)
+        combined_data.append({
+            'label': f"{block_name} Low",
+            'count': count,
+            'type': 'compressed',
+            'sort_key': lower_limit,
+            'color': COMPRESSED_COLOR,
+            'group': block_name
+        })
+
+    result_df = pd.DataFrame(combined_data)
+    if not result_df.empty:
+        result_df = result_df.sort_values('sort_key', ascending=True)
+
+    return result_df, total_in_range
+
+
+def draw_grand_assault_graph(df, view_mode='High', settings=None, save_path=None, show=False):
+    """
+    大決戦データを可視化したグラフを作成します。
+    """
+    if df is None or df.empty:
+        print("[ERROR] データがありません。")
+        return
+
+    # 設定構築
+    if settings is None:
+        target_settings = DEFAULT_SETTINGS.get(view_mode)
+    else:
+        target_settings = settings
+
+    target_name = view_mode
+
+    # 全データ使用
+    df_display = df.copy()
+
+    # データ生成
+    graph_data, total_count = create_single_block_histogram(df_display, target_settings, target_name)
+
+    if graph_data.empty:
+        print("[ERROR] 表示データがありません。範囲を広げるか設定を確認してください。")
+        return
+
+    # 天井の空行追加
+    last_row = graph_data.iloc[-1]
+    if last_row['type'] == 'detail':
+        b_size = target_settings['bin']
+        next_score = last_row['sort_key'] + b_size
+        new_row = pd.DataFrame([{
+            'label': f"{next_score:,}", 'count': 0, 'type': 'detail',
+            'sort_key': next_score, 'color': BAR_COLOR, 'group': target_name
+        }])
+        graph_data = pd.concat([graph_data, new_row], ignore_index=True)
+
+    # 描画設定
+    max_detail_val = graph_data[graph_data['type'] == 'detail']['count'].max()
+    if pd.isna(max_detail_val) or max_detail_val == 0:
+        max_detail_val = 1
+    clip_limit = int(max_detail_val * 1.1)
+
+    plot_counts = graph_data['count'].copy().astype(float)
+    mask_comp = graph_data['type'] == 'compressed'
+    plot_counts.loc[mask_comp] = plot_counts.loc[mask_comp].clip(upper=clip_limit)
+
+    num_bars = len(graph_data)
+    height_per_data = 0.22
+    fig_height = (num_bars * height_per_data) + 2
+
+    # 非GUI環境用の設定
+    plt.close('all')
+    fig, ax = plt.subplots(figsize=(16, max(6, fig_height)))
+    fig.patch.set_facecolor(BG_COLOR)
+    ax.set_facecolor(BG_COLOR)
+
+    y_pos_grid = np.arange(num_bars)
+    y_pos_bar = y_pos_grid + 0.5
+
+    ax.barh(y_pos_bar, plot_counts, color=graph_data['color'], edgecolor='gray', linewidth=0.3, height=0.6, alpha=1.0)
+
+    ax.grid(axis='y', color=GRID_COLOR, linestyle='-', linewidth=0.5, alpha=0.8)
+    ax.set_yticks(y_pos_grid)
+    ax.set_yticklabels(graph_data['label'])
+    ax.grid(axis='x', linestyle='-', color='gray', alpha=0.3, linewidth=0.8)
+    ax.axhline(y=num_bars, color=GRID_COLOR, linestyle='-', linewidth=0.5, alpha=0.8)
+    ax.set_axisbelow(True)
+
+    # ラベル
+    for i, (_, row) in enumerate(graph_data.iterrows()):
+        count = row['count']
+        plot_val = plot_counts.iloc[i]
+        bar_y = y_pos_bar[i]
+        if count > 0:
+            font_w = 'bold' if row['type'] == 'compressed' else 'normal'
+            ax.text(plot_val + (clip_limit * 0.01), bar_y, f"{int(count):,}", va='center', color=TEXT_COLOR, fontsize=9, fontweight=font_w)
+        elif row['type'] == 'compressed':
+             ax.text(clip_limit * 0.01, bar_y, "Gap", va='center', color='gray', fontsize=9, fontstyle='italic')
+
+    # ボーダーライン
+    sorted_df_all = df.sort_values('score', ascending=False).reset_index(drop=True)
+    idx_plat = 19999
+    score_plat = sorted_df_all.iloc[idx_plat]['score'] if len(sorted_df_all) > idx_plat else None
+    idx_gold = 119999
+    score_gold = sorted_df_all.iloc[idx_gold]['score'] if len(sorted_df_all) > idx_gold else None
+
+    def get_y(target_score):
+        return np.interp(target_score, graph_data['sort_key'].values, y_pos_grid)
+
+    visible_min = graph_data['sort_key'].min()
+    visible_max = graph_data['sort_key'].max()
+
+    if score_plat and visible_min <= score_plat <= visible_max:
+        y = get_y(score_plat)
+        if 0 <= y <= num_bars:
+            ax.axhline(y, color='purple', linewidth=1.5, alpha=0.9)
+            ax.text(ax.get_xlim()[1], y, f" Platinum (20,000th): {score_plat:,} ",
+                    va='bottom', ha='right', color='white', fontweight='bold', fontsize=9,
+                    bbox=dict(facecolor='purple', alpha=0.8, edgecolor='none'))
+
+    if score_gold and visible_min <= score_gold <= visible_max:
+        y = get_y(score_gold)
+        if 0 <= y <= num_bars:
+            ax.axhline(y, color='#daa520', linewidth=1.5, alpha=0.9)
+            ax.text(ax.get_xlim()[1], y, f" Gold (120,000th): {score_gold:,} ",
+                    va='bottom', ha='right', color='black', fontweight='bold', fontsize=9,
+                    bbox=dict(facecolor='#ffd700', alpha=0.8, edgecolor='none'))
+
+    ax.set_ylim(0, num_bars)
+    ax.set_title(f'Grand Assault | {view_mode} Block View', fontsize=16, pad=15)
+    ax.set_xlabel('Player Count', fontsize=12)
+
+    # 合計人数表示
+    info_text = f"Count in Range: {total_count:,}"
+    ax.text(0.98, 0.02, info_text, transform=ax.transAxes,
+            fontsize=12, fontweight='bold', va='bottom', ha='right',
+            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.9, edgecolor='gray'))
+
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=150, facecolor=BG_COLOR)
+        print(f"[SUCCESS] 大決戦のグラフ画像を保存しました: {save_path}")
+
+    if show:
+        plt.show()
+        plt.close(fig)
+
+    return fig

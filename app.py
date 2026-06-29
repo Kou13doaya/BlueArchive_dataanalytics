@@ -1,0 +1,924 @@
+# -*- coding: utf-8 -*-
+import os
+import re
+import streamlit as st
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+pd.set_option("styler.render.max_elements", 500000)
+
+from data_loader import DataLoader
+import total_assault
+import grand_assault
+
+# ページ基本設定（ワイドモード、美しいUI）
+st.set_page_config(
+    page_title="ブルアカ 総力戦・大決戦 スコア分布分析ツール",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ブラウザの誤翻訳（英語判定）を防ぐための言語属性(lang="ja")設定、notranslateおよびtranslate="no"属性の注入
+st.markdown("""
+    <script>
+        (function() {
+            function applySettings(doc) {
+                if (!doc) return;
+                var html = doc.documentElement;
+                if (html) {
+                    html.lang = 'ja';
+                    html.setAttribute('xml:lang', 'ja');
+                    html.setAttribute('translate', 'no');
+                    html.classList.add('notranslate');
+                }
+                
+                // meta tagの注入
+                var head = doc.head || doc.getElementsByTagName('head')[0];
+                if (head) {
+                    if (!head.querySelector('meta[name="google"]')) {
+                        var meta = doc.createElement('meta');
+                        meta.name = 'google';
+                        meta.content = 'notranslate';
+                        head.appendChild(meta);
+                    }
+                }
+            }
+
+            // 1. 自身のドキュメントに適用
+            applySettings(window.document);
+
+            // 2. 親のドキュメントに適用（アクセス可能な場合）
+            try {
+                if (window.parent && window.parent.document) {
+                    applySettings(window.parent.document);
+                }
+            } catch (e) {
+                console.warn("Could not access parent document due to same-origin policy:", e);
+            }
+        })();
+    </script>
+""", unsafe_allow_html=True)
+
+# スタイリング (ダーク/ブルー系のカスタムCSS)
+st.markdown("""
+<style>
+    .main-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #1E88E5;
+        margin-bottom: 0.5rem;
+    }
+    .sub-title {
+        font-size: 1.1rem;
+        color: #555555;
+        margin-bottom: 2rem;
+    }
+    .sidebar-header {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #1E88E5;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid #1E88E5;
+        padding-bottom: 5px;
+    }
+    .stAlert {
+        border-radius: 8px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="main-title">Blue Archive Data Analytics</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">総力戦・大決戦データ分析ツール (Preview1)</div>', unsafe_allow_html=True)
+
+# ----------------------------------------------------
+# ユーティリティ関数のインポート
+# ----------------------------------------------------
+from utils import (
+    EVENT_META,
+    make_total_assault_summary,
+    make_grand_assault_summary,
+    translate_diff,
+    translate_block,
+    get_display_name,
+    score_to_clear_time,
+    format_time,
+    format_time_short,
+    get_rank_scores,
+    find_nearest_player,
+    vectorize_score_to_clear_time,
+    normalize_event_id
+)
+
+# data_loader の初期化
+loader = DataLoader()
+
+import base64
+
+@st.cache_data
+def get_base64_image(image_path):
+    if os.path.exists(image_path):
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode('utf-8')
+    return ""
+
+platinum_base64 = get_base64_image("image/platinum.png")
+
+@st.cache_data
+def load_cached_data(event_id):
+    """
+    メモリ上にロード結果をキャッシュし、不要なディスク読み込みを防ぎます。
+    """
+    return loader.load_data(event_id)
+
+@st.cache_data(show_spinner=False)
+def cached_total_assault_graph(df, event_id, draw_mode, selected_zones_tuple, compress_tuple, bin_tuple):
+    return total_assault.draw_parametric_graph(
+        df=df,
+        event_id=event_id,
+        draw_mode=draw_mode,
+        selected_zones=list(selected_zones_tuple),
+        compress_settings=dict(compress_tuple),
+        bin_settings=dict(bin_tuple),
+        save_path=None,
+        show=False
+    )
+
+@st.cache_data(show_spinner=False)
+def cached_grand_assault_graph(df, view_mode, r_min, r_max, comp, bin_size):
+    settings = {'range': [r_min, r_max], 'compress': comp, 'bin': bin_size}
+    return grand_assault.draw_grand_assault_graph(
+        df=df,
+        view_mode=view_mode,
+        settings=settings,
+        save_path=None,
+        show=False
+    )
+
+@st.cache_data(show_spinner=False)
+def get_portal_card_stats(eid):
+    df_event = load_cached_data(eid)
+    total_players = len(df_event) if df_event is not None else 0
+    
+    plat_score_portal = None
+    plat_time_str = ""
+    if df_event is not None and not df_event.empty:
+        sorted_df_portal = df_event.sort_values('score', ascending=False).reset_index(drop=True)
+        plat_score_portal = sorted_df_portal.iloc[19999]['score'] if len(sorted_df_portal) > 19999 else None
+        
+    is_total = normalize_event_id(eid).startswith("total_assault_")
+    if is_total and plat_score_portal is not None:
+        diff, t_sec = score_to_clear_time(plat_score_portal, eid)
+        t_str = format_time_short(t_sec)
+        plat_time_str = f"{diff} {t_str}"
+        
+    return total_players, plat_score_portal, plat_time_str
+
+# rank_data ディレクトリ内のParquetファイルを自動取得
+data_dir = "rank_data"
+available_events = []
+if os.path.exists(data_dir):
+    files = os.listdir(data_dir)
+    for f in files:
+        # 新しいParquet形式を検知
+        match = re.match(r"rank_data_(total_assault_\d+|grand_assault_\d+)\.parquet", f)
+        if match:
+            available_events.append(match.group(1))
+        else:
+            # 移行期間用に旧形式のJSON/Parquetも検知
+            match_old = re.match(r"rank_data_(R\d+|E\d+)\.(?:json|parquet)", f)
+            if match_old:
+                available_events.append(normalize_event_id(match_old.group(1)))
+available_events = sorted(list(set(available_events)), reverse=True)
+
+# Session State とクエリパラメータの同期
+query_params = st.query_params
+if "event_id" in query_params:
+    st.session_state['selected_event_id'] = query_params["event_id"]
+
+event_id = st.session_state.get('selected_event_id')
+
+if event_id:
+    # URLに反映されていなければ書き込む
+    if st.query_params.get("event_id") != event_id:
+        st.query_params["event_id"] = event_id
+        
+    app_mode = "総力戦 (Total Assault)" if normalize_event_id(event_id).startswith("total_assault_") else "大決戦 (Grand Assault)"
+    
+    # データ読み込み
+    df = None
+    with st.spinner("データを取得・解析中..."):
+        df = load_cached_data(event_id)
+else:
+    app_mode = None
+    df = None
+
+# ----------------------------------------------------
+# メイン表示エリア (ポータル画面 または 詳細ダッシュボード)
+# ----------------------------------------------------
+if not event_id:
+    # ====================================================
+    # A. ポータル画面: 総力戦・大決戦ポータル
+    # ====================================================
+    # レスポンシブグリッドと高さ統一のためのカスタムCSS
+    st.markdown("""
+        <style>
+        /* columns のフレックスボックス折り返し設定 */
+        div[data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap !important;
+        }
+        div[data-testid="column"] {
+            min-width: 215px !important;
+            flex: 1 1 215px !important;
+            margin-bottom: 16px !important; /* 上下のカード同士に間隔を持たせる */
+        }
+        
+        /* カード全体のアンカーリンクスタイル */
+        .portal-card {
+            position: relative; /* 絶対配置リンクの基準点 */
+            background-color: #1a202c; /* ダーク系のプレミアムな背景 */
+            border: 1px solid #2d3748;
+            border-radius: 8px;
+            padding: 14px; /* 余白を狭めて引き締める */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 205px; /* 縦幅を少しコンパクトに */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+            height: 100%;
+        }
+        .portal-card:hover {
+            transform: translateY(-4px);
+            border-color: #3b82f6;
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.2), 0 4px 6px -4px rgba(59, 130, 246, 0.2);
+        }
+        
+        /* カード全体を覆う透明なアンカーリンク */
+        .portal-card-link-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            cursor: pointer;
+            background-color: rgba(0, 0, 0, 0); /* 完全透明 */
+            border-radius: 8px;
+        }
+        
+        /* カード上部のヘッダー情報 */
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px; /* 余白を狭める */
+        }
+        .card-badge {
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            font-weight: bold;
+        }
+        .card-period {
+            color: #94a3b8;
+            font-size: 0.72rem;
+            text-align: right;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 140px;
+        }
+        
+        /* ボス名とシーズン番号 */
+        .card-season {
+            color: #94a3b8;
+            font-size: 0.72rem; /* 少し小さく */
+            margin-top: 2px; /* 余白を狭める */
+        }
+        .card-boss {
+            color: #f8fafc;
+            font-size: 1.25rem;
+            font-weight: bold;
+            margin: 2px 0 6px 0; /* 下マージンを狭める */
+            line-height: 1.2;
+            min-height: 2.5rem; /* ボス名表示エリアの高さを縮小 */
+            display: flex;
+            align-items: center;
+        }
+        
+        /* チナトロボーダー領域 */
+        .card-border-area {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 6px; /* 下マージンを狭める */
+        }
+        .card-border-img {
+            width: 24px; /* 少し小さく */
+            height: auto;
+            margin-top: 2px;
+        }
+        .card-border-info {
+            display: flex;
+            flex-direction: column;
+        }
+        .card-border-score {
+            color: #f8fafc;
+            font-size: 1.15rem;
+            font-weight: bold;
+            line-height: 1.1;
+        }
+        .card-border-time {
+            color: #cbd5e1;
+            font-size: 0.78rem;
+            font-weight: bold;
+            margin-top: 1px; /* マージンを詰める */
+        }
+        .card-border-time-placeholder {
+            height: 1.0rem; /* 高さを詰める */
+        }
+        
+        /* 参加者数 */
+        .card-players {
+            color: #94a3b8;
+            font-size: 0.78rem;
+            margin-top: 2px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # 一回り小さくしたタイトル
+    st.markdown("<h2 style='font-size: 2.0rem; font-weight: 800; color: #1E88E5; margin-bottom: 5px;'>総力戦・大決戦</h2>", unsafe_allow_html=True)
+    # ここの文字は不要
+    # st.markdown("<p style='color: #888; font-size: 1.0rem; margin-top: -5px; margin-bottom: 20px;'>過去に開催された総力戦・大決戦の統計ダッシュボード一覧</p>", unsafe_allow_html=True)
+    
+    # 検索窓とカテゴリ切り替えを横並びに配置
+    col_search, col_tabs = st.columns([1, 1])
+    with col_search:
+        search_query = st.text_input("🔍 ボス名またはIDで検索...", value="", placeholder="例: ホバークラフト, S89")
+    with col_tabs:
+        st.write('<div style="height: 10px;"></div>', unsafe_allow_html=True)
+        portal_tab = st.radio(
+            "表示カテゴリ:",
+            ["すべて", "総力戦", "大決戦"],
+            index=0,
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+        
+    # 時系列（開催期間の開始日）の新しい順に並び替え
+    from datetime import datetime
+    
+    def get_event_start_date(eid):
+        meta = EVENT_META.get(normalize_event_id(eid), {})
+        period = meta.get("period", "")
+        if period:
+            start_date_str = period.split(" ～ ")[0].strip()
+            try:
+                return datetime.strptime(start_date_str, "%Y/%m/%d")
+            except Exception:
+                pass
+        return datetime.min
+        
+    sorted_events = sorted(available_events, key=get_event_start_date, reverse=True)
+    
+    # フィルタリング
+    display_events = []
+    for eid in sorted_events:
+        meta = EVENT_META.get(normalize_event_id(eid), {})
+        boss = meta.get("boss", "").lower()
+        season = meta.get("season", "").lower()
+        eid_lower = eid.lower()
+        
+        # 検索マッチ
+        q = search_query.strip().lower()
+        if q:
+            if q not in boss and q not in season and q not in eid_lower:
+                continue
+                
+        # カテゴリマッチ
+        is_total = normalize_event_id(eid).startswith("total_assault_")
+        if portal_tab == "総力戦" and not is_total:
+            continue
+        if portal_tab == "大決戦" and is_total:
+            continue
+            
+        display_events.append(eid)
+        
+    # 4列 of グリッドでカードを描画
+    if display_events:
+        cols = st.columns(4)
+        for i, eid in enumerate(display_events):
+            col = cols[i % 4]
+            meta = EVENT_META.get(normalize_event_id(eid), {})
+            boss_name = meta.get("boss", "Unknown")
+            season_num = meta.get("season", eid)
+            period = meta.get("period", "")
+            is_total = normalize_event_id(eid).startswith("total_assault_")
+            
+            # データの読み込みとチナトロボーダースコア算出をキャッシュ経由で実行
+            total_players, plat_score_portal, plat_time_str = get_portal_card_stats(eid)
+                
+            plat_score_str_portal = f"{int(plat_score_portal):,}" if plat_score_portal is not None else "データ不足"
+
+            with col:
+                badge_color = "#3b82f6" if is_total else "#10b981"
+                type_label = "総力戦" if is_total else "大決戦"
+                
+                time_display_html = f"<div class='card-border-time'>{plat_time_str}</div>" if plat_time_str else "<div class='card-border-time-placeholder'></div>"
+                
+                card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a><div><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-season">{season_num}</div><div class="card-boss">{boss_name}</div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-score">{plat_score_str_portal}</div>{time_display_html}</div></div></div><div class="card-players">👥 参加者: {total_players:,} 人</div></div>"""
+                st.markdown(card_html, unsafe_allow_html=True)
+    else:
+        st.info("該当するシーズンが見つかりませんでした。")
+
+else:
+    # ====================================================
+    # B. 詳細ダッシュボード表示
+    # ====================================================
+    if df is None or df.empty:
+        st.info("👈 左側のサイドバーから有効なイベントIDを選択または入力してください。")
+        st.stop()
+        
+    # 戻るボタン
+    if st.button("← ダッシュボード一覧に戻る", key="back_to_portal_btn"):
+        st.session_state['selected_event_id'] = None
+        st.query_params.clear()
+        st.rerun()
+        
+    # 選択イベントのタイトル表示
+    st.subheader(get_display_name(event_id))
+    
+    # 各種ボーダースコアの事前計算
+    sorted_df = df.sort_values('score', ascending=False).reset_index(drop=True)
+    plat_score = sorted_df.iloc[19999]['score'] if len(sorted_df) > 19999 else None
+    gold_score = sorted_df.iloc[119999]['score'] if len(sorted_df) > 119999 else None
+    silver_score = sorted_df.iloc[239999]['score'] if len(sorted_df) > 239999 else None
+    
+    plat_score_str = f"{int(plat_score):,}" if plat_score is not None else "データ不足"
+    gold_score_str = f"{int(gold_score):,}" if gold_score is not None else "データ不足"
+    silver_score_str = f"{int(silver_score):,}" if silver_score is not None else "データ不足"
+
+    # ====================================================
+    # 2. チナトロ・ゴルドロ・シルトロボーダー (上から2番目 - 横並びカード)
+    # ====================================================
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        with st.container(border=True):
+            sub_img, sub_title = st.columns([1, 4])
+            with sub_img:
+                if os.path.exists("image/platinum.png"):
+                    st.image("image/platinum.png", width=35)
+            with sub_title:
+                st.markdown("**チナトロボーダー**")
+                st.markdown("<small>(上位20,000人)</small>", unsafe_allow_html=True)
+                st.markdown(f"### {plat_score_str}")
+                if app_mode.startswith("総力戦") and plat_score is not None:
+                    diff, t_sec = score_to_clear_time(plat_score, event_id)
+                    t_str = format_time_short(t_sec)
+                    st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
+            
+    with col2:
+        with st.container(border=True):
+            sub_img, sub_title = st.columns([1, 4])
+            with sub_img:
+                if os.path.exists("image/gold.png"):
+                    st.image("image/gold.png", width=35)
+            with sub_title:
+                st.markdown("**ゴルドロボーダー**")
+                st.markdown("<small>(上位120,000人)</small>", unsafe_allow_html=True)
+                st.markdown(f"### {gold_score_str}")
+                if app_mode.startswith("総力戦") and gold_score is not None:
+                    diff, t_sec = score_to_clear_time(gold_score, event_id)
+                    t_str = format_time_short(t_sec)
+                    st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
+            
+    with col3:
+        with st.container(border=True):
+            sub_img, sub_title = st.columns([1, 4])
+            with sub_img:
+                if os.path.exists("image/silver.png"):
+                    st.image("image/silver.png", width=35)
+            with sub_title:
+                st.markdown("**シルトロボーダー**")
+                st.markdown("<small>(上位240,000人)</small>", unsafe_allow_html=True)
+                st.markdown(f"### {silver_score_str}")
+                if app_mode.startswith("総力戦") and silver_score is not None:
+                    diff, t_sec = score_to_clear_time(silver_score, event_id)
+                    t_str = format_time_short(t_sec)
+                    st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
+        
+    st.markdown(f"<h3 style='text-align: center; font-weight: bold; margin-top: 10px;'>総参加者数: {len(df):,} 人</h3>", unsafe_allow_html=True)
+    st.markdown("---")
+
+    # ====================================================
+    # 3. 難易度・順位別クリア状況サマリー (上から3番目 - 折りたたみ)
+    # ====================================================
+    with st.expander("難易度・順位別クリア状況サマリー", expanded=True):
+        col_tab1, col_tab2 = st.columns(2)
+        
+        with col_tab1:
+            st.markdown("##### 難易度別クリア状況")
+            if app_mode.startswith("総力戦"):
+                summary_df = make_total_assault_summary(df, event_id)
+            else:
+                summary_df = make_grand_assault_summary(df)
+            st.dataframe(summary_df, width="stretch", hide_index=True)
+            
+        with col_tab2:
+            st.markdown("##### 主要順位別スコア状況")
+            rank_df = get_rank_scores(df, event_id)
+            st.dataframe(rank_df, width="stretch", hide_index=True)
+
+    st.markdown("---")
+
+    # ====================================================
+    # 4. スコア分布グラフ (上から4番目)
+    # ====================================================
+    with st.expander("スコア・タイム分布グラフ", expanded=True):
+        if app_mode.startswith("総力戦"):
+            # スコアとタイム両対応の表示モード選択を横並びで配置
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                graph_draw_mode = st.radio(
+                    "表示データ形式",
+                    ["スコア", "タイム"],
+                    index=0,
+                    horizontal=True,
+                    key="graph_draw_mode_select"
+                )
+            with col_g2:
+                selected_zones = st.multiselect(
+                    "表示する難易度帯 (複数選択可)",
+                    options=['Lunatic', 'Torment', 'Insane', 'Extreme', 'Hardcore', 'VeryHard', 'Hard', 'Normal'],
+                    default=['Lunatic', 'Torment']
+                )
+            
+            # ボス別のしきい値範囲の上限・下限を厳密に計算
+            meta = EVENT_META.get(normalize_event_id(event_id))
+            boss_name = meta["boss"] if meta else "ビナー"
+            
+            limit_sec = 240
+            if boss_name in ["KAITEN FX Mk.0", "ビナー"]:
+                limit_sec = 180
+            elif boss_name in ["イェソド", "ドラム缶ガニ"]:
+                limit_sec = 270
+                
+            limit_type = limit_sec / 60.0
+            
+            # 各難易度のパラメータ (base_score, k)
+            if limit_type == 3.0:
+                calc_params = {
+                    "Lunatic": (43235000, 2880), "Torment": (31076000, 2400), "Insane": (19249600, 1920), 
+                    "Extreme": (9392000, 1440), "Hardcore": (3832000, 960), "VeryHard": (1916000, 480), "Hard": (958000, 240), "Normal": (479000, 120)
+                }
+            elif limit_type == 4.0:
+                calc_params = {
+                    "Lunatic": (44025000, 2880), "Torment": (31708000, 2400), "Insane": (21016000, 1920), 
+                    "Extreme": (10160000, 1440), "Hardcore": (4216000, 960), "VeryHard": (2108000, 480), "Hard": (1054000, 240), "Normal": (527000, 120)
+                }
+            else: # 4.5
+                calc_params = {
+                    "Lunatic": (44664000, 2880), "Torment": (32502000, 2400), "Insane": (21741016, 1920), 
+                    "Extreme": (10578880, 1440), "Hardcore": (4437600, 960), "VeryHard": (2218800, 480), "Hard": (1109400, 240), "Normal": (554700, 120)
+                }
+                
+            # 各難易度ゾーンのスコア範囲をループで動的に算出
+            ordered_zones = ["Lunatic", "Torment", "Insane", "Extreme", "Hardcore", "VeryHard", "Hard", "Normal"]
+            zone_ranges = {}
+            for idx, zone in enumerate(ordered_zones):
+                base_score, k = calc_params[zone]
+                z_min = base_score
+                if idx == 0:
+                    z_max = base_score + 3600 * k # 最上位難易度の理論上の最大値
+                else:
+                    # 1つ上の難易度の下限直下を上限とする
+                    z_max = calc_params[ordered_zones[idx-1]][0] - 1
+                zone_ranges[zone] = (z_min, z_max)
+
+            # ============================================
+            # 自動しきい値計算（パーセンタイルベース）
+            # ============================================
+            def auto_compress_threshold(df, score_min, score_max, percentile=3.0):
+                """
+                指定難易度帯のスコア群から、下位 percentile% の位置を自動計算し、
+                その値を圧縮しきい値の初期値として返す。
+                """
+                zone_scores = df[(df['score'] >= score_min) & (df['score'] < score_max)]['score']
+                if zone_scores.empty or len(zone_scores) < 10:
+                    # データが少なすぎる場合は下限値を返す
+                    return int(score_min)
+                threshold = int(np.percentile(zone_scores, percentile))
+                # 下限値を下回らないよう保護
+                return max(int(score_min), threshold)
+
+            # 難易度別のパーセンタイル初期設定
+            percentile_settings = {
+                "Lunatic": 5.0,
+                "Torment": 30.0,
+                "Insane": 30.0,
+                "Extreme": 30.0,
+                "Hardcore": 30.0,
+                "VeryHard": 30.0,
+                "Hard": 30.0,
+                "Normal": 30.0
+            }
+            
+            auto_defaults = {}
+            for zone in ordered_zones:
+                z_min, z_max = zone_ranges[zone]
+                pct = percentile_settings.get(zone, 30.0)
+                auto_defaults[zone] = auto_compress_threshold(df, z_min, z_max, percentile=pct)
+
+            with st.expander("難易度別詳細パラメータ設定", expanded=False):
+                if graph_draw_mode == "タイム":
+                    # 各難易度のパラメータを取得
+                    
+                    # 最大限界分と最大限界秒の算出 (0分〜60分に拡大)
+                    max_min = 60
+                    max_sec = 0
+                    limit_text = "60分00秒"
+                    
+                    default_time_bins = {
+                        "Lunatic": 60.0,
+                        "Torment": 1.0,
+                        "Insane": 1.0,
+                        "Extreme": 10.0,
+                        "Hardcore": 10.0,
+                        "VeryHard": 10.0,
+                        "Hard": 10.0,
+                        "Normal": 10.0
+                    }
+                    
+                    active_zones = [z for z in ordered_zones if z in selected_zones]
+                    
+                    compress_settings = {}
+                    bin_settings = {}
+                    
+                    # --- デフォルト値の初期計算 (選択状態にかかわらず裏側の変数定義として必須) ---
+                    for zone in ordered_zones:
+                        base_score, k = calc_params[zone]
+                        auto_def = auto_defaults[zone]
+                        
+                        # 自動しきい値からタイム逆算
+                        auto_time = max(0.0, 3600 - (auto_def - base_score) / k)
+                        auto_time = min(auto_time, 3600.0)
+                        
+                        compress_settings[zone] = auto_def
+                        bin_settings[zone] = int(default_time_bins[zone] * k)
+                        
+                    if not active_zones:
+                        st.info("表示する難易度帯が選択されていません。")
+                    else:
+                        cols = st.columns(len(active_zones))
+                        for col_idx, zone in enumerate(active_zones):
+                            with cols[col_idx]:
+                                st.markdown(f"**{zone} 設定**")
+                                st.markdown("<small>下限タイム</small>", unsafe_allow_html=True)
+                                
+                                base_score, k = calc_params[zone]
+                                auto_def = auto_defaults[zone]
+                                auto_time = max(0.0, 3600 - (auto_def - base_score) / k)
+                                auto_time = min(auto_time, 3600.0)
+                                
+                                def_min = int(auto_time // 60)
+                                def_sec = float(round(auto_time % 60, 3))
+                                
+                                col_m, col_s = st.columns(2)
+                                with col_m:
+                                    t_min_val = st.number_input("分", min_value=0, max_value=max_min, value=def_min, step=1, key=f"{zone}_t_m")
+                                with col_s:
+                                    max_s_val = 0.0 if t_min_val == max_min else 59.999
+                                    t_sec_val = st.number_input("秒", min_value=0.0, max_value=max_s_val, value=def_sec, step=0.1, format="%.3f", key=f"{zone}_t_s")
+                                
+                                total_sec = t_min_val * 60 + t_sec_val
+                                compress_settings[zone] = base_score + (3600 - total_sec) * k
+                                
+                                default_bin_sec = default_time_bins[zone]
+                                time_bin = st.number_input("グラフ１本当たりの幅 (秒)", min_value=0.1, max_value=120.0, value=default_bin_sec, step=1.0 if default_bin_sec >= 1.0 else 0.5, key=f"{zone}_t_bin")
+                                bin_settings[zone] = int(time_bin * k)
+                                
+                else:
+                    default_score_bins = {
+                        "Lunatic": 150000,
+                        "Torment": 1500,
+                        "Insane": 1500,
+                        "Extreme": 30000,
+                        "Hardcore": 30000,
+                        "VeryHard": 30000,
+                        "Hard": 30000,
+                        "Normal": 30000
+                    }
+                    
+                    active_zones = [z for z in ordered_zones if z in selected_zones]
+                    
+                    compress_settings = {}
+                    bin_settings = {}
+                    
+                    # --- デフォルト値の初期計算 ---
+                    for zone in ordered_zones:
+                        compress_settings[zone] = auto_defaults[zone]
+                        bin_settings[zone] = default_score_bins[zone]
+                        
+                    if not active_zones:
+                        st.info("表示する難易度帯が選択されていません。")
+                    else:
+                        cols = st.columns(len(active_zones))
+                        for col_idx, zone in enumerate(active_zones):
+                            z_min, z_max = zone_ranges[zone]
+                            auto_def = auto_defaults[zone]
+                            
+                            with cols[col_idx]:
+                                st.markdown(f"**{zone} 設定**")
+                                comp_val = st.number_input(
+                                    "下限スコア",
+                                    min_value=int(z_min),
+                                    max_value=int(z_max),
+                                    value=int(auto_def),
+                                    step=1000 if (z_max - z_min) < 100000 else 10000,
+                                    help=f"範囲: {int(z_min):,} ～ {int(z_max):,}",
+                                    key=f"{zone}_s_compress"
+                                )
+                                compress_settings[zone] = comp_val
+                                
+                                default_bin_val = default_score_bins[zone]
+                                bin_val = st.number_input(
+                                    "グラフ１本当たりの幅", 
+                                    min_value=10, 
+                                    max_value=1000000, 
+                                    value=default_bin_val, 
+                                    step=100 if default_bin_val < 5000 else 1000, 
+                                    key=f"{zone}_s_bin"
+                                )
+                                bin_settings[zone] = bin_val
+
+            # 描画
+            fig = cached_total_assault_graph(
+                df=df,
+                event_id=event_id,
+                draw_mode=graph_draw_mode,
+                selected_zones_tuple=tuple(selected_zones),
+                compress_tuple=tuple(compress_settings.items()),
+                bin_tuple=tuple(bin_settings.items())
+            )
+            if fig:
+                st.pyplot(fig)
+                plt.close(fig)
+                
+        else:
+            # 大決戦パラメータ取得
+            view_mode = st.selectbox(
+                "表示スコア帯ブロック",
+                ['High', 'Mid', 'Low'],
+                index=0
+            )
+            
+            with st.expander("ブロック詳細パラメータ設定", expanded=False):
+                if view_mode == 'High':
+                    h_col1, h_col2 = st.columns(2)
+                    with h_col1:
+                        h_range = st.slider("表示範囲", min_value=73740000, max_value=121044000, value=[98860000, 121044000], step=100000, format="%d", key="h_g_range")
+                        h_comp = st.slider("下限スコア", min_value=73740000, max_value=121044000, value=107000000, step=10000, format="%d", key="h_g_comp")
+                    with h_col2:
+                        h_bin = st.number_input("グラフ１本当たりの幅", min_value=100, max_value=100000, value=10000, step=500, key="h_g_bin")
+                    settings = {'range': h_range, 'compress': h_comp, 'bin': h_bin}
+                    
+                elif view_mode == 'Mid':
+                    m_col1, m_col2 = st.columns(2)
+                    with m_col1:
+                        m_range = st.slider("表示範囲", min_value=41336000, max_value=83784000, value=[46500000, 83784000], step=100000, format="%d", key="m_g_range")
+                        m_comp = st.slider("下限スコア", min_value=41336000, max_value=83784000, value=69932800, step=10000, format="%d", key="m_g_comp")
+                    with m_col2:
+                        m_bin = st.number_input("グラフ１本当たりの幅", min_value=100, max_value=100000, value=10000, step=500, key="m_g_bin")
+                    settings = {'range': m_range, 'compress': m_comp, 'bin': m_bin}
+                    
+                else: # Low
+                    l_col1, l_col2 = st.columns(2)
+                    with l_col1:
+                        l_range = st.slider("表示範囲", min_value=0, max_value=46032000, value=[43440000, 46032000], step=100000, format="%d", key="l_g_range")
+                        l_comp = st.slider("下限スコア", min_value=0, max_value=46032000, value=44995200, step=10000, format="%d", key="l_g_comp")
+                    with l_col2:
+                        l_bin = st.number_input("グラフ１本当たりの幅", min_value=100, max_value=100000, value=10000, step=500, key="l_g_bin")
+                    settings = {'range': l_range, 'compress': l_comp, 'bin': l_bin}
+
+            # 描画
+            fig = cached_grand_assault_graph(
+                df=df,
+                view_mode=view_mode,
+                r_min=settings['range'][0],
+                r_max=settings['range'][1],
+                comp=settings['compress'],
+                bin_size=settings['bin']
+            )
+            if fig:
+                st.pyplot(fig)
+                plt.close(fig)
+
+    st.markdown("---")
+
+    with st.expander("順位・スコア・タイム検索", expanded=False):
+        
+        # 左右カラムに分割して縦幅を削減 (左: 検索基準ラジオボタン, 右: 各種入力欄)
+        col_radio, col_input = st.columns([2, 3])
+        
+        target_idx = 0
+        
+        with col_radio:
+            if app_mode.startswith("総力戦"):
+                search_by = st.radio(
+                    "検索の基準を選択してください", 
+                    ["順位", "スコア", "タイム"], 
+                    index=0, 
+                    horizontal=True,
+                    key="search_by_select_ta"
+                )
+            else:
+                search_by = st.radio(
+                    "検索の基準を選択してください", 
+                    ["順位", "スコア"], 
+                    index=0, 
+                    horizontal=True,
+                    key="search_by_select_ga"
+                )
+            
+        with col_input:
+            if search_by == "順位":
+                search_rank = st.number_input(
+                    "順位を指定してください（±50位の表が表示されます）",
+                    min_value=1,
+                    max_value=len(df),
+                    value=20000 if len(df) >= 20000 else len(df),
+                    step=100,
+                    key="search_rank_input"
+                )
+                target_idx = int(search_rank) - 1
+            elif search_by == "スコア":
+                search_score = st.number_input(
+                    "スコアを指定してください",
+                    min_value=0,
+                    value=20000000,
+                    step=10000,
+                    key="search_score_input"
+                )
+                actual_rank, actual_score = find_nearest_player(sorted_df, search_score)
+                target_idx = int(actual_rank) - 1
+            else:  # タイム (総力戦専用)
+                meta = EVENT_META.get(normalize_event_id(event_id))
+                boss_name = meta["boss"] if meta else "ビナー"
+                limit_type = 4.0
+                if boss_name in ["KAITEN FX Mk.0", "ビナー"]:
+                    limit_type = 3.0
+                elif boss_name in ["イェソド", "ドラム缶ガニ"]:
+                    limit_type = 4.5
+                    
+                if limit_type == 3.0:
+                    params = {"Lunatic": (43235000, 2880), "Torment": (31076000, 2400), "Insane": (19249600, 1920), "Extreme": (9392000, 1440), "Hardcore": (3832000, 960), "VeryHard": (1916000, 480), "Hard": (958000, 240), "Normal": (479000, 120)}
+                elif limit_type == 4.0:
+                    params = {"Lunatic": (44025000, 2880), "Torment": (31708000, 2400), "Insane": (21016000, 1920), "Extreme": (10160000, 1440), "Hardcore": (4216000, 960), "VeryHard": (2108000, 480), "Hard": (1054000, 240), "Normal": (527000, 120)}
+                else:
+                    params = {"Lunatic": (44664000, 2880), "Torment": (32502000, 2400), "Insane": (21741016, 1920), "Extreme": (10578880, 1440), "Hardcore": (4437600, 960), "VeryHard": (2218800, 480), "Hard": (1109400, 240), "Normal": (554700, 120)}
+ 
+                col_t_diff, col_t_m, col_t_s = st.columns([2, 1, 1])
+                with col_t_diff:
+                    search_diff = st.selectbox("クリア難易度を選択", options=list(params.keys()), index=2, key="search_diff_select")
+                with col_t_m:
+                    search_min = st.number_input("分", min_value=0, max_value=20, value=2, step=1, key="search_min_input")
+                with col_t_s:
+                    search_sec = st.number_input("秒 (小数可)", min_value=0.0, max_value=59.999, value=30.0, step=0.1, format="%.3f", key="search_sec_input")
+                
+                total_search_sec = search_min * 60 + search_sec
+                base_score, k = params[search_diff]
+                estimated_score = base_score + (3600 - total_search_sec) * k
+                actual_rank, actual_score = find_nearest_player(sorted_df, estimated_score)
+                target_idx = int(actual_rank) - 1
+            
+        # ターゲット位置を中心に前後50位（計101名）をスライス
+        start_idx = max(0, target_idx - 50)
+        end_idx = min(len(sorted_df), target_idx + 51)
+        
+        display_df = sorted_df.iloc[start_idx:end_idx].copy()
+        display_df['順位'] = display_df.index + 1
+        
+        if app_mode.startswith("総力戦"):
+            diffs, times = vectorize_score_to_clear_time(display_df['score'], event_id)
+            display_df['クリア難易度'] = diffs
+            display_df['クリアタイム'] = times
+            
+        if 'score' in display_df.columns:
+            display_df = display_df.rename(columns={'score': 'スコア'})
+            
+        cols = ['順位'] + [c for c in display_df.columns if c not in ['順位']]
+        display_df = display_df[cols]
+        
+        # Pandas Styler を用いてターゲット行を薄いゴールドでハイライト表示
+        def highlight_target(df_data):
+            styles = pd.DataFrame('', index=df_data.index, columns=df_data.columns)
+            if target_idx in df_data.index:
+                styles.loc[target_idx] = 'background-color: rgba(255, 215, 0, 0.25); font-weight: bold; border: 1px solid gold;'
+            return styles
+
+        styled_df = display_df.style.apply(highlight_target, axis=None)
+        st.dataframe(styled_df, width="stretch", hide_index=True)
