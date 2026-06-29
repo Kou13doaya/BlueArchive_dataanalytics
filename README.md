@@ -29,11 +29,11 @@ streamlit run app.py
 ### 2. コマンドラインツールによるグラフ生成 (CLI)
 特定イベントのグラフを直接画像として出力したい場合に使用します。
 ```bash
-# 総力戦 (R89) のグラフを生成して保存
-python run_analysis.py --event R89
+# 総力戦 (total_assault_89) のグラフを生成して保存
+python run_analysis.py --event total_assault_89
 
-# 大決戦 (E34) のグラフを中位ブロック(Mid)で生成して保存
-python run_analysis.py --event E34 --mode Mid
+# 大決戦 (grand_assault_34) のグラフを中位ブロック(Mid)で生成して保存
+python run_analysis.py --event grand_assault_34 --mode Mid
 ```
 
 ---
