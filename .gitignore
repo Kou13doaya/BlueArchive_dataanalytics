@@ -1,5 +1,6 @@
 __pycache__/
 *.parquet
+!rank_data/rank_data_total_assault_99.parquet
 *.pyc
 .env
 .venv/
