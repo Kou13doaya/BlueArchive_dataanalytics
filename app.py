@@ -357,7 +357,7 @@ if not event_id:
     # 検索窓とカテゴリ切り替えを横並びに配置
     col_search, col_tabs = st.columns([1, 1])
     with col_search:
-        search_query = st.text_input("🔍 ボス名またはIDで検索...", value="", placeholder="例: ホバークラフト, S89")
+        search_query = st.text_input("🔍 ボス名またはIDで検索...", value="", placeholder="例: ビナー, S90")
     with col_tabs:
         st.write('<div style="height: 10px;"></div>', unsafe_allow_html=True)
         portal_tab = st.radio(
