@@ -13,6 +13,10 @@ venv/
 *.jpg
 *.jpeg
 *.png
+!image/*.jpg
+!image/*.jpeg
+!image/*.png
 # image/ や templates/ はアプリの実行に必要かもしれないので除外しませんが、
 # もしこれらが大量 of OCRテスト画像であれば別途検討してください。
 archive/
+

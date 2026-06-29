@@ -19,6 +19,7 @@ EVENT_META = {
     "total_assault_87": {"season": "S87", "boss": "ゴズ", "period": "2026/03/25 ～ 2026/04/01"},
     "total_assault_88": {"season": "S88", "boss": "KAITEN FX Mk.0", "period": "2026/04/29 ～ 2026/05/06"},
     "total_assault_89": {"season": "S89", "boss": "ドラム缶ガニ", "period": "2026/06/03 ～ 2026/06/10"},
+    "total_assault_99": {"season": "S99", "boss": "Null（beta）", "period": "2026/06/29 ～ 2026/07/06"},
     "grand_assault_25": {"season": "S25", "boss": "ビナー", "period": "2025/08/13 ～ 2025/08/20"},
     "grand_assault_26": {"season": "S26", "boss": "ケセド", "period": "2025/09/10 ～ 2025/09/17"},
     "grand_assault_27": {"season": "S27", "boss": "シロ＆クロ", "period": "2025/10/15 ～ 2025/10/22"},
