@@ -53,11 +53,12 @@ python run_analysis.py --event grand_assault_34 --mode Mid
 ├── OCR/                        # OCR（画像・動画認識）に関連するモジュール
 │   ├── ocr_engine.py           # テンプレートマッチングによる画像解析エンジン
 │   ├── ocr_parser.py           # EasyOCRを用いた画像パーサー
-│   ├── video_ocr_parser.py      # スクロール動画からデータを抽出するパーサー
+│   ├── video_ocr_parser.py     # スクロール動画からデータを抽出するパーサー
 │   ├── build_templates.py      # テンプレート画像作成スクリプト
 │   ├── binarize_templates.py   # テンプレート二値化前処理スクリプト
 │   ├── ocr_specification.md    # OCRシステムの設計・高速化仕様書
 │   ├── templates/              # OCR認識用数字画像アセット
+│   ├── video/                  # 解析対象ビデオファイル置き場（命名規則制限あり）
 │   └── debug/                  # ロジック調整・デバッグ用スクリプト群
 │
 ├── analytics/                  # 統計・グラフ描画に関連するモジュール
@@ -84,10 +85,14 @@ python run_analysis.py --event grand_assault_34 --mode Mid
 利用規約（ https://bluearchive.jp/terms ）の禁止事項（通信情報の傍受、リバースエンジニアリング、BOT/自動化プログラムの利用など）を厳格に遵守するため、以下の方式によるデータ収集を検討・推奨しています。
 
 * **録画動画からのOCR（画像認識）解析方式**:
-  1. ユーザー自身がOSの標準機能（Windows Game BarやOBS等）を使用し、ゲーム内のランキング画面を手動でスクロールする動画（MP4等）をキャプチャします。
-  2. 以下のコマンドで、録画した動画ファイルを読み込ませ、OCR機能（文字認識）により順位とスコアを自動抽出してParquet形式のデータを作成します。
+  1. ユーザー自身がOSの標準機能（Windows Game BarやOBS等）を使用し、ゲーム内のランキング画面を手動でスクロールする動画（MP4等）をキャプチャします。キャプチャした動画は `OCR/video/` ディレクトリに配置してください（命名規則: `T/Gシーズン_年月日_日時.mp4` または `T/Gシーズン_last.mp4`）。
+  2. 以下のコマンドで、対話的に動画ファイルを選択するか、動画名を直接指定してOCRを実行します。結果は自動で `rank_data/` フォルダへ `rank_data_{event_id}.parquet` の名前で直接出力されます。
   ```bash
-  python OCR/video_ocr_parser.py --video <動画パス> --event <イベントID> --interval 0.1 --outdir rank_data
+  # 対話式メニューで実行（推奨）
+  python OCR/video_ocr_parser.py --interval 0.1
+  
+  # または直接ファイル名を指定して実行
+  python OCR/video_ocr_parser.py --video <動画ファイル名> --interval 0.1
   ```
   * ※ ゲームの通信を傍受したりプログラムを改造することなく、また自動スクロール（BOT/マクロ）を行わないため、最も利用規約上の安全性が高い方法です。
 

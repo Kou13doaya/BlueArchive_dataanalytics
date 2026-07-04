@@ -1,11 +1,20 @@
 import os
 import re
+import sys
 import argparse
+
+# Add project root and current directory to sys.path to allow running from any directory
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+for p in [project_root, current_dir]:
+    if p not in sys.path:
+        sys.path.append(p)
+
 import cv2
 import pandas as pd
 import numpy as np
 import easyocr
-from ocr.ocr_engine import TemplateParser
+from ocr_engine import TemplateParser
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -268,20 +277,117 @@ class VideoOCRParser:
         # Map index of df_save to the 'rank' values from df properly
         df_save = df.set_index('rank')[['score']].astype('int32')
         
-        save_path = os.path.join(self.data_dir, f"ocr_rank_data_{event_id}.parquet")
+        os.makedirs(self.data_dir, exist_ok=True)
+        save_path = os.path.join(self.data_dir, f"rank_data_{event_id}.parquet")
         df_save.to_parquet(save_path, compression='zstd')
         print(f"[SUCCESS] Video OCR processing complete. Saved to {save_path} (N={len(df_save)})")
         
         return df_save
 
+def parse_video_filename(video_path):
+    """
+    Parse video filename based on pattern: [TorG][Season]_[Date]_[TimeOrLast]
+    Returns standard event_id if matched, otherwise None.
+    """
+    basename = os.path.splitext(os.path.basename(video_path))[0]
+    pattern = r"^(?P<type>[TG])(?P<season>\d+)_(?:(?P<date>\d{8})_(?P<time>\d{4})|(?P<last>last))$"
+    match = re.match(pattern, basename)
+    if not match:
+        return None
+        
+    gd = match.groupdict()
+    type_str = "total_assault" if gd["type"] == "T" else "grand_assault"
+    season = gd["season"]
+    
+    if gd["last"]:
+        event_id = f"{type_str}_{season}_last"
+    else:
+        event_id = f"{type_str}_{season}_{gd['date']}_{gd['time']}"
+        
+    return event_id
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract ranking data from Blue Archive scroll videos.")
-    parser.add_argument("--video", required=True, help="Path to the video file")
-    parser.add_argument("--event", required=True, help="Event ID (e.g., R43)")
+    parser.add_argument("--video", required=False, help="Path to the video file (filename only or full path inside video folder)")
+    parser.add_argument("--event", required=False, help="Event ID (e.g., R43). If omitted, auto-detected from video filename.")
     parser.add_argument("--interval", type=float, default=0.1, help="Sampling interval in seconds")
-    parser.add_argument("--outdir", default=".", help="Output directory for the parquet file")
+    parser.add_argument("--outdir", default="rank_data", help="Output directory for the parquet file")
     
     args = parser.parse_args()
     
+    # OCR/video ディレクトリの設定
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    video_dir = os.path.join(current_dir, "video")
+    
+    # video ディレクトリ内の動画ファイルをスキャン
+    all_videos = []
+    if os.path.exists(video_dir):
+        all_videos = [f for f in os.listdir(video_dir) if f.lower().endswith(".mp4")]
+        
+    # 正しい命名ルールにマッチする動画を抽出
+    valid_videos = []
+    for v in all_videos:
+        full_path = os.path.join(video_dir, v)
+        ev_id = parse_video_filename(full_path)
+        if ev_id:
+            valid_videos.append((v, full_path, ev_id))
+            
+    # 正しい動画が1つもない場合はエラー終了
+    if not valid_videos:
+        print("エラー: 動画ファイル名が条件を満たさないタイトルになっているため、処理を中断します。正しい形式（例: T/Gシーズン[総力戦/大決戦]_年月日_日時 または last[最終結果]）に修正してください。", file=sys.stderr)
+        sys.exit(1)
+        
+    # ビデオパスの決定
+    target_video_path = None
+    target_event_id = args.event
+    
+    if args.video:
+        # 直接指定された場合
+        # 指定された動画が video_dir 内のファイル名か、あるいはそこへのパスか検証
+        video_name = os.path.basename(args.video)
+        # 拡張子なしで指定された場合の補完
+        if not video_name.lower().endswith(".mp4"):
+            video_name += ".mp4"
+            
+        matched_video = None
+        for name, full_path, ev_id in valid_videos:
+            if name.lower() == video_name.lower():
+                matched_video = (name, full_path, ev_id)
+                break
+                
+        if not matched_video:
+            # 命名ルール違反、または video フォルダ内に存在しない
+            print("エラー: 動画ファイル名が条件を満たさないタイトルになっているため、処理を中断します。正しい形式（例: T/Gシーズン[総力戦/大決戦]_年月日_日時 または last[最終結果]）に修正してください。", file=sys.stderr)
+            sys.exit(1)
+            
+        target_video_path = matched_video[1]
+        if not target_event_id:
+            target_event_id = matched_video[2]
+    else:
+        # 指定がない場合、インタラクティブ選択
+        print("[INFO] OCR/video フォルダ内に以下の正しい形式の動画が見つかりました:")
+        for idx, (name, _, _) in enumerate(valid_videos, 1):
+            print(f"{idx}: {name}")
+        print("")
+        
+        while True:
+            try:
+                choice = input(f"OCRにかける動画の番号を入力してください (1-{len(valid_videos)}): ")
+                choice_idx = int(choice) - 1
+                if 0 <= choice_idx < len(valid_videos):
+                    selected = valid_videos[choice_idx]
+                    break
+                else:
+                    print(f"1 から {len(valid_videos)} の範囲で入力してください。")
+            except ValueError:
+                print("有効な数値を入力してください。")
+                
+        target_video_path = selected[1]
+        if not target_event_id:
+            target_event_id = selected[2]
+            
+    print(f"[INFO] Selected Video: {target_video_path}")
+    print(f"[INFO] Target Event ID: {target_event_id}")
+    
     video_ocr = VideoOCRParser(data_dir=args.outdir)
-    video_ocr.process_and_save(args.video, args.event, sample_interval_sec=args.interval)
+    video_ocr.process_and_save(target_video_path, target_event_id, sample_interval_sec=args.interval)
