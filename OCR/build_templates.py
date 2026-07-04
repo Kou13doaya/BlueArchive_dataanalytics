@@ -37,8 +37,8 @@ def build_templates():
         "OCR/total_assault_99 - frame at 0m4s.jpg"
     ]
     
-    os.makedirs("templates/rank", exist_ok=True)
-    os.makedirs("templates/score", exist_ok=True)
+    os.makedirs("OCR/templates/rank", exist_ok=True)
+    os.makedirs("OCR/templates/score", exist_ok=True)
     
     needed_rank = set("0123456789位")
     needed_score = set("0123456789,")
@@ -141,7 +141,7 @@ def build_templates():
                         elif char == '位':
                             filename = "wei"
                             
-                        save_name = f"templates/{category}/{filename}.png"
+                        save_name = f"OCR/templates/{category}/{filename}.png"
                         cv2.imwrite(save_name, char_img)
                         target_set.add(char)
                         print(f"  [SAVED] {category.upper()} template for '{char}' -> {save_name} (Size: {cw}x{ch})")

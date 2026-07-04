@@ -13,13 +13,13 @@ gray = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2GRAY)
 # Load templates
 rank_templates = {}
 for i in range(10):
-    rank_templates[str(i)] = cv2.imread(f"templates/rank/{i}.png", 0)
-rank_templates["位"] = cv2.imread("templates/rank/wei.png", 0)
+    rank_templates[str(i)] = cv2.imread(f"OCR/templates/rank/{i}.png", 0)
+rank_templates["位"] = cv2.imread("OCR/templates/rank/wei.png", 0)
 
 score_templates = {}
 for i in range(10):
-    score_templates[str(i)] = cv2.imread(f"templates/score/{i}.png", 0)
-score_templates[","] = cv2.imread("templates/score/comma.png", 0)
+    score_templates[str(i)] = cv2.imread(f"OCR/templates/score/{i}.png", 0)
+score_templates[","] = cv2.imread("OCR/templates/score/comma.png", 0)
 
 def match_column(gray_img, templates, x_min, x_max, is_rank=False):
     all_matches = []

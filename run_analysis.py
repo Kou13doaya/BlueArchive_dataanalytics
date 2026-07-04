@@ -4,9 +4,9 @@ import os
 import sys
 
 from data_loader import DataLoader
-import total_assault
-import grand_assault
-from utils import normalize_event_id
+from analytics import total_assault
+from analytics import grand_assault
+from common.event_metadata import normalize_event_id
 
 def main():
     parser = argparse.ArgumentParser(description="ブルーアーカイブ 総力戦・大決戦のスコア分布可視化ツール")

@@ -5,7 +5,9 @@ import cv2
 import pandas as pd
 import numpy as np
 import easyocr
-from template_parser import TemplateParser
+from ocr.ocr_engine import TemplateParser
+from concurrent.futures import ThreadPoolExecutor
+
 
 class VideoOCRParser:
     def __init__(self, data_dir=".", use_gpu=False):
@@ -35,30 +37,80 @@ class VideoOCRParser:
         last_cropped_frame = None
         
         frame_idx = 0
-        processed_count = 0
         skipped_static_count = 0
         
-        max_frame = int(fps * 3.0) # Process only the first 3 seconds
+        max_frame = total_frames # Process the entire video duration
         
+        import queue
+        import threading
+        
+        MAX_WORKERS = 8
+        q = queue.Queue(maxsize=64)
+        lock = threading.Lock()
+        
+        def process_single_frame(task):
+            f_idx, f_data = task
+            rows = self.parser.parse_image(f_data)
+            return f_idx, rows
+            
+        def worker():
+            while True:
+                task = q.get()
+                if task is None:
+                    q.task_done()
+                    break
+                f_idx, f_data = task
+                f_idx, rows = process_single_frame((f_idx, f_data))
+                
+                with lock:
+                    for r in rows:
+                        rank = r['rank']
+                        score = r['score']
+                        
+                        # 進行フレーム数に応じた想定順位範囲外の誤検知(桁落ちによる1/2桁誤認など)を除外する外れ値フィルタ
+                        # スクロール速度に応じた単調増加特性を利用し、マージンを±10に厳格制限します
+                        expected_rank = int(f_idx * 0.55)
+                        margin = 10
+                        if not (max(0, expected_rank - margin) <= rank <= expected_rank + margin + 40):
+                            continue
+                            
+                        if rank not in aggregated_data:
+                            aggregated_data[rank] = []
+                            rank_detected_frames[rank] = []
+                        aggregated_data[rank].append(score)
+                        rank_detected_frames[rank].append(f_idx)
+                q.task_done()
+                
+        # Start worker threads
+        threads = []
+        for _ in range(MAX_WORKERS):
+            t = threading.Thread(target=worker)
+            t.start()
+            threads.append(t)
+            
+        # Producer loop
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
                 
             if frame_idx > max_frame:
-                print(f"[INFO] Reached 3s limit (frame {frame_idx}). Stopping.")
                 break
                 
             if frame_idx % frame_step == 0:
                 h, w, _ = frame.shape
-                # Crop ranking list region
-                crop_x_start = int(w * 0.35)
-                crop_x_end = int(w * 0.68)
-                cropped_img = frame[:, crop_x_start:crop_x_end]
+                crop_x_start = int(w * 0.35) + 76
+                crop_x_end = int(w * 0.55) - 10
+                crop_y_start = int(h * 0.35)
+                crop_y_end = int(h * 0.90)
+                cropped_img = frame[crop_y_start:crop_y_end, crop_x_start:crop_x_end]
+                
+                # Convert to grayscale early for diff calculation and template matching
+                cropped_gray = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2GRAY)
                 
                 # Check for frame change (skip if static)
                 if last_cropped_frame is not None:
-                    diff = cv2.absdiff(cropped_img, last_cropped_frame)
+                    diff = cv2.absdiff(cropped_gray, last_cropped_frame)
                     mean_diff = np.mean(diff)
                     
                     if mean_diff < diff_threshold:
@@ -66,34 +118,22 @@ class VideoOCRParser:
                         frame_idx += 1
                         continue
                 
-                last_cropped_frame = cropped_img.copy()
-                processed_count += 1
+                last_cropped_frame = cropped_gray.copy()
                 
-                # Save temp frame
-                temp_frame_path = f"temp_frame_{frame_idx}.png"
-                cv2.imwrite(temp_frame_path, frame)
-                
-                print(f"[INFO] Processing Frame {frame_idx}/{total_frames} (Time: {frame_idx/fps:.1f}s)...")
-                rows = self.parser.parse_image(temp_frame_path)
-                
-                if os.path.exists(temp_frame_path):
-                    os.remove(temp_frame_path)
-                    
-                # Aggregate results
-                for r in rows:
-                    rank = r['rank']
-                    score = r['score']
-                    if rank not in aggregated_data:
-                        aggregated_data[rank] = []
-                        rank_detected_frames[rank] = []
-                    aggregated_data[rank].append(score)
-                    rank_detected_frames[rank].append(frame_idx)
-
+                # Put in queue (blocks if queue is full)
+                q.put((frame_idx, cropped_gray))
             
             frame_idx += 1
             
+        # Signal workers to exit
+        for _ in range(MAX_WORKERS):
+            q.put(None)
+            
+        for t in threads:
+            t.join()
+            
         cap.release()
-        print(f"[INFO] Video processing finished. Processed frames: {processed_count}, Skipped static frames: {skipped_static_count}")
+        print(f"[INFO] Video frame processing finished. Skipped static frames: {skipped_static_count}")
         
         # Check for missing ranks and backtrack
         detected_ranks = sorted(list(aggregated_data.keys()))
@@ -107,13 +147,15 @@ class VideoOCRParser:
             
             if missing_ranks:
                 print(f"[INFO] Initial missing ranks: {missing_ranks}")
+                
+                # Plan backtracking tasks to avoid duplicate parsing
+                backtrack_tasks = {}
                 cap_bt = cv2.VideoCapture(video_path)
+                
                 for G in missing_ranks:
-                    # Find previous detected rank
                     prev_r = G - 1
                     while prev_r >= min_r and prev_r not in aggregated_data:
                         prev_r -= 1
-                    # Find next detected rank
                     next_r = G + 1
                     while next_r <= max_r and next_r not in aggregated_data:
                         next_r += 1
@@ -122,33 +164,45 @@ class VideoOCRParser:
                         start_f = max(rank_detected_frames[prev_r])
                         end_f = min(rank_detected_frames[next_r])
                         
-                        # Restrict backtrack window size to prevent infinite loop or huge scans
-                        if start_f < end_f and (end_f - start_f) <= 30: # 30 frames is ~1 second, very safe
-                            print(f"[INFO] Backtracking: Missing Rank {G} between Rank {prev_r} (frame {start_f}) and Rank {next_r} (frame {end_f})")
-                            cap_bt.set(cv2.CAP_PROP_POS_FRAMES, start_f)
+                        if start_f < end_f and (end_f - start_f) <= 30:
+                            print(f"[INFO] Backtracking plan: Rank {G} between Rank {prev_r} (frame {start_f}) and Rank {next_r} (frame {end_f})")
                             for f_idx in range(start_f, end_f + 1):
-                                ret, frame = cap_bt.read()
-                                if not ret:
-                                    break
-                                # Process the frame
-                                h, w, _ = frame.shape
-                                crop_x_start = int(w * 0.35)
-                                crop_x_end = int(w * 0.68)
-                                cropped_img = frame[:, crop_x_start:crop_x_end]
-                                
-                                temp_frame_path = f"temp_frame_backtrack_{f_idx}.png"
-                                cv2.imwrite(temp_frame_path, frame)
-                                rows = self.parser.parse_image(temp_frame_path)
-                                if os.path.exists(temp_frame_path):
-                                    os.remove(temp_frame_path)
-                                    
-                                for r in rows:
-                                    if r['rank'] == G:
-                                        if G not in aggregated_data:
-                                            aggregated_data[G] = []
-                                        aggregated_data[G].append(r['score'])
-                                        print(f"  [FOUND] Rank {G} (Score: {r['score']}) in backtracking at frame {f_idx}!")
-                cap_bt.release()
+                                if f_idx not in backtrack_tasks:
+                                    backtrack_tasks[f_idx] = []
+                                backtrack_tasks[f_idx].append(G)
+                
+                if backtrack_tasks:
+                    frames_to_backtrack = []
+                    for f_idx in sorted(backtrack_tasks.keys()):
+                        cap_bt.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
+                        ret, frame = cap_bt.read()
+                        if ret:
+                            # Preprocess frame to be cropped grayscale just like standard pipeline
+                            h, w, _ = frame.shape
+                            crop_x_start = int(w * 0.35) + 76
+                            crop_x_end = int(w * 0.55) - 10
+                            crop_y_start = int(h * 0.35)
+                            crop_y_end = int(h * 0.90)
+                            cropped_img = frame[crop_y_start:crop_y_end, crop_x_start:crop_x_end]
+                            cropped_gray = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2GRAY)
+                            frames_to_backtrack.append((f_idx, cropped_gray))
+                    cap_bt.release()
+                    
+                    print(f"[INFO] Starting parallel backtracking scan on {len(frames_to_backtrack)} frames...")
+                    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                        bt_results = executor.map(process_single_frame, frames_to_backtrack)
+                        
+                    for f_idx, rows in bt_results:
+                        targets = backtrack_tasks[f_idx]
+                        for r in rows:
+                            if r['rank'] in targets:
+                                G = r['rank']
+                                if G not in aggregated_data:
+                                    aggregated_data[G] = []
+                                aggregated_data[G].append(r['score'])
+                                print(f"  [FOUND] Rank {G} (Score: {r['score']}) in backtracking at frame {f_idx}!")
+                else:
+                    cap_bt.release()
         
         # Resolve final score for each rank
         final_results = []
@@ -211,7 +265,8 @@ class VideoOCRParser:
                 print(f"[WARNING] Missing ranks in the sequence: {sorted(list(missing_ranks))}")
         
         df = pd.DataFrame(validated_rows)
-        df_save = pd.DataFrame({'score': df['score'].astype('int32')})
+        # Map index of df_save to the 'rank' values from df properly
+        df_save = df.set_index('rank')[['score']].astype('int32')
         
         save_path = os.path.join(self.data_dir, f"ocr_rank_data_{event_id}.parquet")
         df_save.to_parquet(save_path, compression='zstd')

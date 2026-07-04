@@ -5,7 +5,7 @@ import numpy as np
 def binarize_templates():
     categories = ["rank", "score"]
     for cat in categories:
-        folder = f"templates/{cat}"
+        folder = f"OCR/templates/{cat}"
         if not os.path.exists(folder):
             continue
             

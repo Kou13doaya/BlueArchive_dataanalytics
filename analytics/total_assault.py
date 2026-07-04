@@ -3,78 +3,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import re
-from utils import normalize_event_id
-
-# ==========================================
-# 総力戦クリアタイム逆算ロジック (total_assault.py自己完結用)
-# ==========================================
-EVENT_META = {
-    "total_assault_43": {"season": "S43", "boss": "ケセド", "period": "2022/12/07 ～ 2022/12/14"},
-    "total_assault_44": {"season": "S44", "boss": "ペロロジラ", "period": "2022/12/21 ～ 2022/12/28"},
-    "total_assault_80": {"season": "S80", "boss": "ホド", "period": "2025/07/30 ～ 2025/08/06"},
-    "total_assault_81": {"season": "S81", "boss": "ペロロジラ", "period": "2025/08/27 ～ 2025/09/03"},
-    "total_assault_82": {"season": "S82", "boss": "ケセド", "period": "2025/10/01 ～ 2025/10/08"},
-    "total_assault_83": {"season": "S83", "boss": "イェソド", "period": "2025/10/29 ～ 2025/11/05"},
-    "total_assault_84": {"season": "S84", "boss": "クロカゲ", "period": "2025/11/26 ～ 2025/12/03"},
-    "total_assault_85": {"season": "S85", "boss": "ホバークラフト", "period": "2025/12/31 ～ 2026/01/07"},
-    "total_assault_86": {"season": "S86", "boss": "ビナー", "period": "2026/02/18 ～ 2026/02/25"},
-    "total_assault_87": {"season": "S87", "boss": "ゴズ", "period": "2026/03/25 ～ 2026/04/01"},
-    "total_assault_88": {"season": "S88", "boss": "KAITEN FX Mk.0", "period": "2026/04/29 ～ 2026/05/06"},
-    "total_assault_89": {"season": "S89", "boss": "ドラム缶ガニ", "period": "2026/06/03 ～ 2026/06/10"},
-}
-
-def score_to_clear_time(score, event_id):
-    if not event_id:
-        return "Unknown", None
-    event_id = normalize_event_id(event_id)
-    if not event_id.startswith("total_assault_"):
-        return "Unknown", None
-    meta = EVENT_META.get(event_id)
-    boss_name = meta["boss"] if meta else ""
-    limit_type = 4.0
-    if boss_name in ["KAITEN FX Mk.0", "ビナー"]:
-        limit_type = 3.0
-    elif boss_name in ["イェソド", "ドラム缶ガニ"]:
-        limit_type = 4.5
-    if limit_type == 3.0:
-        params = {
-            "Lunatic": (43235000, 2880), "Torment": (31076000, 2400), "Insane": (19249600, 1920),
-            "Extreme": (9392000, 1440), "Hardcore": (3832000, 960), "VeryHard": (1916000, 480), "Hard": (958000, 240), "Normal": (479000, 120)
-        }
-    elif limit_type == 4.0:
-        params = {
-            "Lunatic": (44025000, 2880), "Torment": (31708000, 2400), "Insane": (21016000, 1920),
-            "Extreme": (10160000, 1440), "Hardcore": (4216000, 960), "VeryHard": (2108000, 480), "Hard": (1054000, 240), "Normal": (527000, 120)
-        }
-    else:
-        params = {
-            "Lunatic": (44664000, 2880), "Torment": (32502000, 2400), "Insane": (21741016, 1920),
-            "Extreme": (10578880, 1440), "Hardcore": (4437600, 960), "VeryHard": (2218800, 480), "Hard": (1109400, 240), "Normal": (554700, 120)
-        }
-    for diff, (base_score, k) in params.items():
-        if score >= base_score:
-            time_score = score - base_score
-            t_seconds = 3600 - (time_score / k)
-            max_limit = limit_type * 60 * 2
-            if 0 <= t_seconds <= max_limit:
-                return diff, t_seconds
-            if t_seconds >= 0:
-                return diff, t_seconds
-    return "Unknown", None
-
-def format_time_short(t_seconds):
-    if t_seconds is None or t_seconds < 0:
-        return "N/A"
-    minutes = int(t_seconds // 60)
-    seconds = int(t_seconds % 60)
-    ms = int(round((t_seconds % 1) * 1000))
-    if ms >= 1000:
-        seconds += 1
-        ms -= 1000
-    if seconds >= 60:
-        minutes += 1
-        seconds -= 60
-    return f"{minutes}:{seconds:02d}.{ms:03d}"
+from common.event_metadata import EVENT_META, normalize_event_id
+from common.score_converter import score_to_clear_time, format_time_short
 
 # ==========================================
 # 固定設定

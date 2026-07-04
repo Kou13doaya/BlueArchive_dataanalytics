@@ -10,7 +10,7 @@ data_loader.py
 import os
 import warnings
 import pandas as pd
-from utils import normalize_event_id, to_legacy_event_id
+from common.event_metadata import normalize_event_id, to_legacy_event_id
 
 class DataLoader:
     def __init__(self, data_dir="rank_data"):
