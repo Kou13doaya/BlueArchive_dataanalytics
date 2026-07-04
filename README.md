@@ -76,9 +76,16 @@ python run_analysis.py --event grand_assault_34 --mode Mid
 
 ## 📊 データソースとローカルデータについて
 
-### キャッシュの活用 (推奨)
-データは `rank_data/rank_data_{event_id}.parquet` としてローカルにキャッシュされます。
-キャッシュが存在する場合、インターネット接続なしで高速にデータをロードできます。
+### キャッシュの活用とバージョン管理 (推奨)
+データは `rank_data/` ディレクトリ配下に `rank_data_{event_id}_{suffix}.parquet` の形式でキャッシュされます。
+同じシーズン（イベントID）であっても、後ろに異なるサフィックス（日付時間や `last`）を付与することで、複数の時期のデータを保存可能です。
+
+* **例**:
+  * `rank_data_total_assault_00_last.parquet` （最終結果データ）
+  * `rank_data_total_assault_00_20260603_1100.parquet` （2026/06/03 11:00 時点の途中データ）
+
+GUI（Streamlitアプリ）上では、同じイベントIDのデータは1つの選択肢に統合され、詳細画面のサイドバーにある**「データ取得時期」**ドロップダウンから自由に表示データを切り替えることができます。
+
 ※ 推奨されるデータ追加方法：新しいイベントのスコアデータをParquet形式で `rank_data/` に直接配置してください。
 
 ### 規約に準拠したデータ取得方法 (推奨アプローチ)
@@ -86,7 +93,7 @@ python run_analysis.py --event grand_assault_34 --mode Mid
 
 * **録画動画からのOCR（画像認識）解析方式**:
   1. ユーザー自身がOSの標準機能（Windows Game BarやOBS等）を使用し、ゲーム内のランキング画面を手動でスクロールする動画（MP4等）をキャプチャします。キャプチャした動画は `OCR/video/` ディレクトリに配置してください（命名規則: `T/Gシーズン_年月日_日時.mp4` または `T/Gシーズン_last.mp4`）。
-  2. 以下のコマンドで、対話的に動画ファイルを選択するか、動画名を直接指定してOCRを実行します。結果は自動で `rank_data/` フォルダへ `rank_data_{event_id}.parquet` の名前で直接出力されます。
+  2. 以下のコマンドで、対話的に動画ファイルを選択するか、動画名を直接指定してOCRを実行します。結果は自動で `rank_data/` フォルダへ `rank_data_{event_id}_{suffix}.parquet` の名前で直接出力されます。
   ```bash
   # 対話式メニューで実行（推奨）
   python OCR/video_ocr_parser.py --interval 0.1

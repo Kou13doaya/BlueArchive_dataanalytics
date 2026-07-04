@@ -119,11 +119,11 @@ def get_base64_image(image_path):
 platinum_base64 = get_base64_image("image/platinum.png")
 
 @st.cache_data
-def load_cached_data(event_id):
+def load_cached_data(event_id, suffix=None):
     """
     メモリ上にロード結果をキャッシュし、不要なディスク読み込みを防ぎます。
     """
-    return loader.load_data(event_id)
+    return loader.load_data(event_id, suffix=suffix)
 
 @st.cache_data(show_spinner=False)
 def cached_total_assault_graph(df, event_id, draw_mode, selected_zones_tuple, compress_tuple, bin_tuple):
@@ -150,8 +150,9 @@ def cached_grand_assault_graph(df, view_mode, r_min, r_max, comp, bin_size):
     )
 
 @st.cache_data(show_spinner=False)
-def get_portal_card_stats(eid):
-    df_event = load_cached_data(eid)
+def get_portal_card_stats(eid, suffix=None):
+    # ポータルカード統計用のデータ読み込み時にも最新のサフィックスを使用する
+    df_event = load_cached_data(eid, suffix=suffix)
     total_players = len(df_event) if df_event is not None else 0
     
     plat_score_portal = None
@@ -170,20 +171,45 @@ def get_portal_card_stats(eid):
 
 # rank_data ディレクトリ内のParquetファイルを自動取得
 data_dir = "rank_data"
-available_events = []
+event_suffix_map = {} # { event_id: [suffix1, suffix2, ...] }
 if os.path.exists(data_dir):
     files = os.listdir(data_dir)
     for f in files:
-        # 新しいParquet形式を検知
-        match = re.match(r"rank_data_(total_assault_\d+|grand_assault_\d+)\.parquet", f)
+        # サフィックス付き形式 (例: rank_data_total_assault_99_last.parquet / rank_data_total_assault_99_20260603_1100.parquet)
+        match = re.match(r"rank_data_(total_assault_\d+|grand_assault_\d+)(?:_(.+))?\.parquet", f)
         if match:
-            available_events.append(match.group(1))
+            eid = match.group(1)
+            suffix = match.group(2) or ""
+            
+            if eid not in event_suffix_map:
+                event_suffix_map[eid] = []
+            event_suffix_map[eid].append(suffix)
         else:
             # 移行期間用に旧形式のJSON/Parquetも検知
             match_old = re.match(r"rank_data_(R\d+|E\d+)\.(?:json|parquet)", f)
             if match_old:
-                available_events.append(normalize_event_id(match_old.group(1)))
-available_events = sorted(list(set(available_events)), reverse=True)
+                eid = normalize_event_id(match_old.group(1))
+                if eid not in event_suffix_map:
+                    event_suffix_map[eid] = []
+                event_suffix_map[eid].append("")
+
+# 重複を排除しソート。各イベント内のサフィックスは "last" を先頭にし、他は降順（新しい時間順）にする
+available_events = sorted(list(event_suffix_map.keys()), reverse=True)
+
+for eid in event_suffix_map:
+    suffixes = list(set(event_suffix_map[eid]))
+    # "last" があれば最優先、それ以外は降順ソート
+    other_suffixes = [s for s in suffixes if s not in ["", "last"]]
+    other_suffixes.sort(reverse=True)
+    
+    sorted_suffixes = []
+    if "last" in suffixes:
+        sorted_suffixes.append("last")
+    if "" in suffixes:
+        sorted_suffixes.append("")
+    sorted_suffixes.extend(other_suffixes)
+    
+    event_suffix_map[eid] = sorted_suffixes
 
 # Session State とクエリパラメータの同期
 query_params = st.query_params
@@ -199,10 +225,43 @@ if event_id:
         
     app_mode = "総力戦 (Total Assault)" if normalize_event_id(event_id).startswith("total_assault_") else "大決戦 (Grand Assault)"
     
+    # 戻るボタンをサイドバー最上部に配置
+    if st.sidebar.button("← 一覧に戻る", key="back_to_portal_btn", use_container_width=True):
+        st.session_state['selected_event_id'] = None
+        st.query_params.clear()
+        st.rerun()
+    st.sidebar.markdown("---")
+    
+    # サフィックスの選択UI
+    selected_suffix = None
+    if event_id in event_suffix_map:
+        suffixes = event_suffix_map[event_id]
+        if len(suffixes) > 1:
+            def format_suffix(s):
+                if s == "last":
+                    return "最終結果"
+                elif s == "":
+                    return "デフォルト"
+                else:
+                    # 20260603_1100 -> 2026/06/03 11:00 のように整形
+                    match_dt = re.match(r"^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})$", s)
+                    if match_dt:
+                        return f"{match_dt.group(1)}/{match_dt.group(2)}/{match_dt.group(3)} {match_dt.group(4)}:{match_dt.group(5)}"
+                    return s
+            
+            selected_suffix = st.sidebar.selectbox(
+                "データ取得時期",
+                suffixes,
+                format_func=format_suffix,
+                key="data_version_suffix"
+            )
+        else:
+            selected_suffix = suffixes[0] if suffixes else None
+
     # データ読み込み
     df = None
     with st.spinner("データを取得・解析中..."):
-        df = load_cached_data(event_id)
+        df = load_cached_data(event_id, suffix=selected_suffix)
 else:
     app_mode = None
     df = None
@@ -412,10 +471,25 @@ if not event_id:
             period = meta.get("period", "")
             is_total = normalize_event_id(eid).startswith("total_assault_")
             
-            # データの読み込みとチナトロボーダースコア算出をキャッシュ経由で実行
-            total_players, plat_score_portal, plat_time_str = get_portal_card_stats(eid)
+            # 最新のサフィックス（時期）を取得してボーダースコア算出に使用する
+            suffixes = event_suffix_map.get(eid, [])
+            latest_suffix = suffixes[0] if suffixes else None
+            
+            total_players, plat_score_portal, plat_time_str = get_portal_card_stats(eid, suffix=latest_suffix)
                 
             plat_score_str_portal = f"{int(plat_score_portal):,}" if plat_score_portal is not None else "データ不足"
+
+            # 最終更新情報表示用の文字列を作成
+            if latest_suffix == "last":
+                update_status_str = "最終結果"
+            elif latest_suffix == "":
+                update_status_str = ""
+            else:
+                match_dt = re.match(r"^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})$", latest_suffix)
+                if match_dt:
+                    update_status_str = f"最終更新日: {match_dt.group(1)}/{match_dt.group(2)}/{match_dt.group(3)} {match_dt.group(4)}:{match_dt.group(5)}"
+                else:
+                    update_status_str = f"最終更新日: {latest_suffix}"
 
             with col:
                 badge_color = "#3b82f6" if is_total else "#10b981"
@@ -423,7 +497,9 @@ if not event_id:
                 
                 time_display_html = f"<div class='card-border-time'>{plat_time_str}</div>" if plat_time_str else "<div class='card-border-time-placeholder'></div>"
                 
-                card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a><div><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-season">{season_num}</div><div class="card-boss">{boss_name}</div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-score">{plat_score_str_portal}</div>{time_display_html}</div></div></div><div class="card-players">👥 参加者: {total_players:,} 人</div></div>"""
+                status_html = f"<div style='color: #94a3b8; font-size: 0.78rem; margin-top: 10px;'>{update_status_str}</div>" if update_status_str else ""
+                
+                card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a><div><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-season">{season_num}</div><div class="card-boss">{boss_name}</div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-score">{plat_score_str_portal}</div>{time_display_html}</div></div></div>{status_html}</div>"""
                 st.markdown(card_html, unsafe_allow_html=True)
     else:
         st.info("該当するシーズンが見つかりませんでした。")
@@ -435,12 +511,6 @@ else:
     if df is None or df.empty:
         st.info("👈 左側のサイドバーから有効なイベントIDを選択または入力してください。")
         st.stop()
-        
-    # 戻るボタン
-    if st.button("← ダッシュボード一覧に戻る", key="back_to_portal_btn"):
-        st.session_state['selected_event_id'] = None
-        st.query_params.clear()
-        st.rerun()
         
     # 選択イベントのタイトル表示
     st.subheader(get_display_name(event_id))
