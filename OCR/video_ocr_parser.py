@@ -62,6 +62,11 @@ class VideoOCRParser:
             rows = self.parser.parse_image(f_data)
             return f_idx, rows
             
+        def process_single_frame_backtrack(task):
+            f_idx, f_data = task
+            rows = self.parser.parse_image(f_data, threshold_rank=0.60)
+            return f_idx, rows
+            
         def worker():
             while True:
                 task = q.get()
@@ -76,12 +81,12 @@ class VideoOCRParser:
                         rank = r['rank']
                         score = r['score']
                         
-                        # 進行フレーム数に応じた想定順位範囲外の誤検知(桁落ちによる1/2桁誤認など)を除外する外れ値フィルタ
-                        # スクロール速度に応じた単調増加特性を利用し、マージンを±10に厳格制限します
-                        expected_rank = int(f_idx * 0.55)
-                        margin = 10
-                        if not (max(0, expected_rank - margin) <= rank <= expected_rank + margin + 40):
-                            continue
+                        # 桁落ち防止フィルタ（スレッドセーフ）
+                        # すでに確定している最大順位より桁数が少ない場合は桁落ち誤検知と判定
+                        if aggregated_data:
+                            current_max_digits = len(str(max(aggregated_data.keys())))
+                            if len(str(rank)) < current_max_digits:
+                                continue
                             
                         if rank not in aggregated_data:
                             aggregated_data[rank] = []
@@ -144,6 +149,19 @@ class VideoOCRParser:
         cap.release()
         print(f"[INFO] Video frame processing finished. Skipped static frames: {skipped_static_count}")
         
+        # IQRによる順位の外れ値排除（9718などの桁挿入誤読をシングルスレッドで安全に排除）
+        if len(aggregated_data) >= 4:
+            detected_ranks = sorted(aggregated_data.keys())
+            q1 = detected_ranks[len(detected_ranks) // 4]
+            q3 = detected_ranks[3 * len(detected_ranks) // 4]
+            iqr = q3 - q1
+            upper_fence = q3 + iqr * 3
+            
+            for r in [r for r in detected_ranks if r > upper_fence]:
+                print(f"[INFO] Removing rank outlier (IQR filter): {r} (upper fence: {upper_fence})")
+                del aggregated_data[r]
+                del rank_detected_frames[r]
+        
         # Check for missing ranks and backtrack
         detected_ranks = sorted(list(aggregated_data.keys()))
         if detected_ranks:
@@ -199,7 +217,7 @@ class VideoOCRParser:
                     
                     print(f"[INFO] Starting parallel backtracking scan on {len(frames_to_backtrack)} frames...")
                     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-                        bt_results = executor.map(process_single_frame, frames_to_backtrack)
+                        bt_results = executor.map(process_single_frame_backtrack, frames_to_backtrack)
                         
                     for f_idx, rows in bt_results:
                         targets = backtrack_tasks[f_idx]

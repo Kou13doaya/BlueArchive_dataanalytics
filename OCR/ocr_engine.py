@@ -85,16 +85,25 @@ class TemplateParser:
         # Sort by confidence descending
         all_matches.sort(key=lambda x: x[5], reverse=True)
         
-        # Non-Maximum Suppression (NMS) using Bounding Box Intersection
+        # Non-Maximum Suppression (NMS) using Bounding Box Intersection and X-distance
         keep = []
         for m in all_matches:
             x, y, w, h, char, conf = m
             overlap = False
             for km in keep:
                 kx, ky, kw, kh, kchar, kconf = km
+                
+                # 1. Bounding Box Overlap check
                 if self.is_box_overlap(x, y, w, h, kx, ky, kw, kh):
                     overlap = True
                     break
+                    
+                # 2. X-distance check for extremely close digits on the same line
+                if abs(y - ky) < 15: # Same line
+                    min_dist = 12 if is_rank else 8
+                    if abs(x - kx) < min_dist:
+                        overlap = True
+                        break
             if not overlap:
                 keep.append(m)
                 
@@ -124,7 +133,7 @@ class TemplateParser:
             
         return results
 
-    def parse_image(self, image_path):
+    def parse_image(self, image_path, threshold_rank=0.84):
         if isinstance(image_path, np.ndarray):
             img = image_path
         else:
@@ -155,7 +164,7 @@ class TemplateParser:
         # まず全体等倍固定スキャンで「位」の位置を大まかに特定する
         rank_scan_limit = 190
         gray_rank_roi = gray[0:300, 0:rank_scan_limit]
-        first_pass_ranks = self.match_column(gray_rank_roi, self.rank_templates, 0, rank_scan_limit, is_rank=True, threshold=0.84)
+        first_pass_ranks = self.match_column(gray_rank_roi, self.rank_templates, 0, rank_scan_limit, is_rank=True, threshold=threshold_rank)
         
         if first_pass_ranks:
             # 「位」が含まれる検出 data を探す
@@ -183,7 +192,7 @@ class TemplateParser:
                 gray_digits_roi = gray_rank_roi[y_start:y_end, 0:rank_scan_limit]
                 
                 # 高さ64pxの極小スリットに対して【数字と「位」の両方】をスキャンする
-                second_pass_ranks = self.match_column(gray_digits_roi, self.rank_templates, 0, rank_scan_limit, is_rank=True, threshold=0.84)
+                second_pass_ranks = self.match_column(gray_digits_roi, self.rank_templates, 0, rank_scan_limit, is_rank=True, threshold=threshold_rank)
                 
                 # 検出座標のY復元と、Xフィルタ（「位」の右側のバッジ等のゴミを完全に除外）
                 valid_ranks = []
@@ -213,20 +222,39 @@ class TemplateParser:
         top_rank_val = int(digits)
         top_y = top_rank_data['y']
         
-        # Step 2: Predict the Second Rank (遅番) values and coordinates mathematically (Y2 = Y_top + 201px)
-        second_rank_val = top_rank_val + 1
-        second_y = top_y + 201
+        # Step 2: Predict offsets and coordinates dynamically based on the base rank's position (top_y)
+        # Scale parameters to match the input image resolution (from 1080p to 4K etc.)
+        height_cropped = gray.shape[0]
+        height_orig = int(height_cropped / 0.55)
+        scale_ratio = height_orig / 1080.0
+        row_pitch = int(201 * scale_ratio)
         
-        # Step 3: Match Scores using 1.0x Equal Scale inside narrow vertical slits (50px height)
-        # Bounded within X = 89px to 298px
-        score_rows = []
-        for rank_val, base_y in [(top_rank_val, top_y), (second_rank_val, second_y)]:
-            # 中心予測位置(base_y + 60px)から縦幅50px固定でスリットを切り出す
-            score_center_y = base_y + 60
-            y_start = int(score_center_y - 25)
-            y_end = int(score_center_y + 25)
+        limit_1 = int(107 * scale_ratio)
+        limit_2 = int(166 * scale_ratio)
+        
+        # Determine the scan range dynamically (Mutually Exclusive)
+        if top_y < limit_1:
+            offsets = (0, 1, 2)
+        elif top_y < limit_2:
+            offsets = (0, 1)
+        else:
+            offsets = (-1, 0, 1)
             
-            # 境界保護と縦幅(50px)の維持
+        # Step 3: Match Scores using 1.0x Equal Scale inside narrow vertical slits (50px height)
+        score_rows = []
+        x_start_score = int(crop_width * 0.29866) # Scale 89px relative to 298px crop_width
+        
+        for k in offsets:
+            rank_val = top_rank_val + k
+            base_y = top_y + row_pitch * k
+            
+            # 中心予測位置(base_y + 60px)から縦幅50px固定でスリットを切り出す
+            score_center_y = base_y + int(60 * scale_ratio)
+            y_slit_height = int(25 * scale_ratio)
+            y_start = int(score_center_y - y_slit_height)
+            y_end = int(score_center_y + y_slit_height)
+            
+            # 境界保護と縦幅の維持
             if y_start < 0:
                 y_end += abs(y_start)
                 y_start = 0
@@ -237,19 +265,19 @@ class TemplateParser:
             y_start = max(0, y_start)
             y_end = min(gray.shape[0], y_end)
             
-            # Slit ROI (X starts from 89px to 298px)
-            gray_score_roi = gray[y_start:y_end, 89:crop_width]
+            # Slit ROI
+            gray_score_roi = gray[y_start:y_end, x_start_score:crop_width]
             
             # Match using 1.0x equal scale score templates (threshold=0.78)
-            raw_scores = self.match_column(gray_score_roi, self.score_templates, 0, crop_width - 89, is_rank=False, threshold=0.78)
+            raw_scores = self.match_column(gray_score_roi, self.score_templates, 0, crop_width - x_start_score, is_rank=False, threshold=0.78)
             
             if raw_scores:
                 # Sort from left to right (ascending X)
                 raw_scores.sort(key=lambda s: s['x'])
                 score_text = "".join(s['text'] for s in raw_scores)
                 score_digits = re.sub(r'[^0-9]', '', score_text)
-                if 7 <= len(score_digits) <= 9:
-                    score_val = int(score_digits)
+                if len(score_digits) >= 8:
+                    score_val = int(score_digits[:8])
                     score_rows.append({'rank': rank_val, 'score': score_val})
         return score_rows
 
