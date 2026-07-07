@@ -64,7 +64,7 @@ class VideoOCRParser:
             
         def process_single_frame_backtrack(task):
             f_idx, f_data = task
-            rows = self.parser.parse_image(f_data, threshold_rank=0.60)
+            rows = self.parser.parse_image(f_data)
             return f_idx, rows
             
         def worker():
@@ -200,9 +200,19 @@ class VideoOCRParser:
                 
                 if backtrack_tasks:
                     frames_to_backtrack = []
+                    curr_pos = -1
                     for f_idx in sorted(backtrack_tasks.keys()):
-                        cap_bt.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
+                        if curr_pos == -1 or f_idx <= curr_pos or f_idx > curr_pos + 60:
+                            seek_pos = max(0, f_idx - 60)
+                            cap_bt.set(cv2.CAP_PROP_POS_FRAMES, seek_pos)
+                            for _ in range(f_idx - seek_pos):
+                                cap_bt.read()
+                        else:
+                            for _ in range(f_idx - curr_pos - 1):
+                                cap_bt.read()
+                                
                         ret, frame = cap_bt.read()
+                        curr_pos = f_idx
                         if ret:
                             # Preprocess frame to be cropped grayscale just like standard pipeline
                             h, w, _ = frame.shape
@@ -293,7 +303,13 @@ class VideoOCRParser:
         
         df = pd.DataFrame(validated_rows)
         # Map index of df_save to the 'rank' values from df properly
-        df_save = df.set_index('rank')[['score']].astype('int32')
+        df_save = df.set_index('rank')[['score']]
+        if not df_save.empty:
+            min_r = df_save.index.min()
+            max_r = df_save.index.max()
+            full_index = pd.RangeIndex(start=min_r, stop=max_r + 1, name='rank')
+            df_save = df_save.reindex(full_index)
+            df_save['score'] = df_save['score'].astype(pd.Int32Dtype())
         
         os.makedirs(self.data_dir, exist_ok=True)
         save_path = os.path.join(self.data_dir, f"rank_data_{event_id}.parquet")
