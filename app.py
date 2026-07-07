@@ -575,7 +575,7 @@ else:
                     t_str = format_time_short(t_sec)
                     st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
         
-    st.markdown(f"<h3 style='text-align: center; font-weight: bold; margin-top: 10px;'>総参加者数: {len(df):,} 人</h3>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='text-align: center; font-weight: bold; margin-top: 10px;'>取得上位データ総数: {len(df):,} 人</h3>", unsafe_allow_html=True)
     st.markdown("---")
 
     # ====================================================
