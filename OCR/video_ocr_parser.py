@@ -42,7 +42,8 @@ class VideoOCRParser:
         frame_step = int(fps * sample_interval_sec)
         
         aggregated_data = {} # rank -> list of scores (to handle duplicates/voting)
-        rank_detected_frames = {} # rank -> list of frame_idx
+        rank_detected_frames = {} # rank -> list of frame_idx (for logging/compat)
+        rank_detected_msec = {} # rank -> list of timestamp in msec (for VFR-safe backtrack seek)
         last_cropped_frame = None
         
         frame_idx = 0
@@ -73,8 +74,8 @@ class VideoOCRParser:
                 if task is None:
                     q.task_done()
                     break
-                f_idx, f_data = task
-                f_idx, rows = process_single_frame((f_idx, f_data))
+                f_idx, f_msec, f_data = task
+                _, rows = process_single_frame((f_idx, f_data))
                 
                 with lock:
                     for r in rows:
@@ -91,8 +92,10 @@ class VideoOCRParser:
                         if rank not in aggregated_data:
                             aggregated_data[rank] = []
                             rank_detected_frames[rank] = []
+                            rank_detected_msec[rank] = []
                         aggregated_data[rank].append(score)
                         rank_detected_frames[rank].append(f_idx)
+                        rank_detected_msec[rank].append(f_msec)
                 q.task_done()
                 
         # Start worker threads
@@ -104,6 +107,8 @@ class VideoOCRParser:
             
         # Producer loop
         while True:
+            # タイムスタンプはcap.read()の前に取得するとVFR動画でも正確
+            frame_msec = cap.get(cv2.CAP_PROP_POS_MSEC)
             ret, frame = cap.read()
             if not ret:
                 break
@@ -134,8 +139,8 @@ class VideoOCRParser:
                 
                 last_cropped_frame = cropped_gray.copy()
                 
-                # Put in queue (blocks if queue is full)
-                q.put((frame_idx, cropped_gray))
+                # Put in queue with msec timestamp (blocks if queue is full)
+                q.put((frame_idx, frame_msec, cropped_gray))
             
             frame_idx += 1
             
@@ -161,6 +166,7 @@ class VideoOCRParser:
                 print(f"[INFO] Removing rank outlier (IQR filter): {r} (upper fence: {upper_fence})")
                 del aggregated_data[r]
                 del rank_detected_frames[r]
+                del rank_detected_msec[r]
         
         # Check for missing ranks and backtrack
         detected_ranks = sorted(list(aggregated_data.keys()))
@@ -175,9 +181,9 @@ class VideoOCRParser:
             if missing_ranks:
                 print(f"[INFO] Initial missing ranks: {missing_ranks}")
                 
-                # Plan backtracking tasks to avoid duplicate parsing
-                backtrack_tasks = {}
-                cap_bt = cv2.VideoCapture(video_path)
+                # Plan backtracking windows (start_msec, end_msec, target_ranks)
+                # Use msec timestamps for VFR-safe seeking
+                bt_windows = {}  # (start_msec, end_msec) -> set of target ranks
                 
                 for G in missing_ranks:
                     prev_r = G - 1
@@ -188,58 +194,69 @@ class VideoOCRParser:
                         next_r += 1
                         
                     if prev_r in aggregated_data and next_r in aggregated_data:
+                        start_msec = max(rank_detected_msec[prev_r])
+                        end_msec = min(rank_detected_msec[next_r])
                         start_f = max(rank_detected_frames[prev_r])
                         end_f = min(rank_detected_frames[next_r])
                         
-                        if start_f < end_f and (end_f - start_f) <= 30:
-                            print(f"[INFO] Backtracking plan: Rank {G} between Rank {prev_r} (frame {start_f}) and Rank {next_r} (frame {end_f})")
-                            for f_idx in range(start_f, end_f + 1):
-                                if f_idx not in backtrack_tasks:
-                                    backtrack_tasks[f_idx] = []
-                                backtrack_tasks[f_idx].append(G)
+                        # VFR対応: フレーム数ではなくタイムスタンプ差（ms）で判定
+                        # 30フレーム相当の時間を上限とする（約1500ms）
+                        if start_msec < end_msec and (end_msec - start_msec) <= 1500:
+                            print(f"[INFO] Backtracking plan: Rank {G} between Rank {prev_r} (frame {start_f}, {start_msec:.0f}ms) and Rank {next_r} (frame {end_f}, {end_msec:.0f}ms)")
+                            key = (start_msec, end_msec)
+                            if key not in bt_windows:
+                                bt_windows[key] = set()
+                            bt_windows[key].add(G)
                 
-                if backtrack_tasks:
-                    frames_to_backtrack = []
-                    curr_pos = -1
-                    for f_idx in sorted(backtrack_tasks.keys()):
-                        if curr_pos == -1 or f_idx <= curr_pos or f_idx > curr_pos + 60:
-                            seek_pos = max(0, f_idx - 60)
-                            cap_bt.set(cv2.CAP_PROP_POS_FRAMES, seek_pos)
-                            for _ in range(f_idx - seek_pos):
-                                cap_bt.read()
-                        else:
-                            for _ in range(f_idx - curr_pos - 1):
-                                cap_bt.read()
-                                
-                        ret, frame = cap_bt.read()
-                        curr_pos = f_idx
-                        if ret:
-                            # Preprocess frame to be cropped grayscale just like standard pipeline
-                            h, w, _ = frame.shape
-                            crop_x_start = int(w * 0.35) + 76
-                            crop_x_end = int(w * 0.55) - 10
-                            crop_y_start = int(h * 0.35)
-                            crop_y_end = int(h * 0.90)
-                            cropped_img = frame[crop_y_start:crop_y_end, crop_x_start:crop_x_end]
-                            cropped_gray = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2GRAY)
-                            frames_to_backtrack.append((f_idx, cropped_gray))
+                if bt_windows:
+                    # 各ウィンドウについて、1秒前にシークして逐次読み込みで全フレームを取得
+                    # → cap.set(POS_MSEC)のキーフレーム精度問題を回避
+                    frames_to_backtrack = []  # (actual_msec, gray, frozenset of targets)
+                    cap_bt = cv2.VideoCapture(video_path)
+                    
+                    for (start_msec, end_msec), targets in sorted(bt_windows.items()):
+                        # 1秒前にシークしてから逐次読み込み（確実にキーフレームを跨ぐ）
+                        cap_bt.set(cv2.CAP_PROP_POS_MSEC, max(0.0, start_msec - 1000.0))
+                        
+                        while True:
+                            pre_read_msec = cap_bt.get(cv2.CAP_PROP_POS_MSEC)
+                            ret, frame = cap_bt.read()
+                            if not ret:
+                                break
+                            # このフレームの実際のタイムスタンプ（read前の位置がそのフレームのmsec）
+                            actual_msec = pre_read_msec
+                            if actual_msec > end_msec + 100:
+                                break
+                            if actual_msec >= start_msec - 50:
+                                h, w, _ = frame.shape
+                                crop_x_start = int(w * 0.35) + 76
+                                crop_x_end = int(w * 0.55) - 10
+                                crop_y_start = int(h * 0.35)
+                                crop_y_end = int(h * 0.90)
+                                cropped_img = frame[crop_y_start:crop_y_end, crop_x_start:crop_x_end]
+                                cropped_gray = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2GRAY)
+                                frames_to_backtrack.append((actual_msec, cropped_gray, frozenset(targets)))
                     cap_bt.release()
                     
                     print(f"[INFO] Starting parallel backtracking scan on {len(frames_to_backtrack)} frames...")
+                    
+                    def process_bt_frame(task):
+                        t_msec, gray, tgt = task
+                        rows = self.parser.parse_image(gray)
+                        return t_msec, rows, tgt
+                    
                     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-                        bt_results = executor.map(process_single_frame_backtrack, frames_to_backtrack)
+                        bt_results = executor.map(process_bt_frame, frames_to_backtrack)
                         
-                    for f_idx, rows in bt_results:
-                        targets = backtrack_tasks[f_idx]
+                    for t_msec, rows, targets in bt_results:
                         for r in rows:
                             if r['rank'] in targets:
                                 G = r['rank']
                                 if G not in aggregated_data:
                                     aggregated_data[G] = []
                                 aggregated_data[G].append(r['score'])
-                                print(f"  [FOUND] Rank {G} (Score: {r['score']}) in backtracking at frame {f_idx}!")
-                else:
-                    cap_bt.release()
+                                print(f"  [FOUND] Rank {G} (Score: {r['score']}) in backtracking at {t_msec:.0f}ms!")
+
         
         # Resolve final score for each rank
         final_results = []
