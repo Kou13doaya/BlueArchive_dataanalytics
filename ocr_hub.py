@@ -457,38 +457,33 @@ def input_boundary_ranks_flow():
         }
 
     while True:
-        print("\n--- 現在の登録状態 ---")
+        print("\n--- 現在の各難易度のTop順位登録状態 ---")
         
-        # 登録済みの表示文字列を作成するヘルパー
-        def get_status_str(diff_name=None, border_rank=None, is_normal_bottom=False):
-            # 1. ユーザーがこのセッションで手動入力した、または既存の boundary/ocr データをチェック
+        def get_menu_line(choice_num, diff_name=None, border_rank=None, is_normal_bottom=False):
+            # 1. ボーダー (20k, 120k, 240k)
             if border_rank:
+                border_names = {20000: "チナトロボーダー", 120000: "ゴルドロボーダー", 240000: "シルトロボーダー"}
+                b_name = border_names.get(border_rank, f"{border_rank}位ボーダー")
                 if border_rank in temp_entries:
                     val, st = temp_entries[border_rank]
-                    return f"(登録済み: {val:,}点 [{st}])"
-                return "(未登録)"
+                    return f"{choice_num}: {b_name} {border_rank:,}位 - {val:,}点 (登録済み: [{st}])"
+                return f"{choice_num}: {b_name} {border_rank:,}位 (未登録)"
                 
+            # 2. 総参加者数
             if is_normal_bottom:
-                # Normal最下位は temp_entries 内で最大の順位
-                # ただしボーダー(20k, 120k, 240k)以外の最大順位
                 candidates = [r for r in temp_entries.keys() if r not in [20000, 120000, 240000]]
                 if candidates:
                     max_r = max(candidates)
                     val, st = temp_entries[max_r]
-                    return f"(登録済み: {max_r:,}位 - {val:,}点 [{st}])"
-                return "(未登録)"
+                    return f"{choice_num}: 総参加者数 {max_r:,}位 - {val:,}点 (登録済み: [{st}])"
+                return f"{choice_num}: 総参加者数 (未登録)"
 
+            # 3. 難易度一位
             if diff_name:
-                # 難易度クリア境界（一位）の自動検出
-                # df または temp_entries の中から、基準スコア以上の最小順位（＝その難易度の一位）を割り出す
                 thresh = thresholds.get(diff_name, 0)
-                
-                # temp_entries から該当する最小順位を検索
                 valid_ranks = []
                 for r, (sc, st) in temp_entries.items():
                     if sc >= thresh:
-                        # 1つ上の難易度の閾値があればそれ未満であることを条件にする（単体一位を正しく出すため）
-                        # ただし最上位難易度の場合は上限なし
                         diff_idx = diffs.index(diff_name)
                         if diff_idx == 0:
                             valid_ranks.append((r, sc, st))
@@ -499,26 +494,26 @@ def input_boundary_ranks_flow():
                                 valid_ranks.append((r, sc, st))
 
                 if valid_ranks:
-                    # 順位が最小（＝一位）のもの
                     valid_ranks.sort(key=lambda x: x[0])
                     best_rank, best_score, st = valid_ranks[0]
-                    return f"(検出済み: {best_rank:,}位 - {best_score:,}点 [{st}])"
-                return "(未登録)"
-            return "(未登録)"
+                    status_label = "検出済み" if st == 'ocr' else "登録済み"
+                    return f"{choice_num}: {diff_name} {best_rank:,}位 - {best_score:,}点 ({status_label}: [{st}])"
+                return f"{choice_num}: {diff_name} 一位 (未登録)"
+            return ""
 
         # 選択メニューと登録状態の表示
-        print(f"1: Lunatic 一位 {get_status_str(diff_name='Lunatic')}")
-        print(f"2: Torment 一位 {get_status_str(diff_name='Torment')}")
-        print(f"3: Insane 一位 {get_status_str(diff_name='Insane')}")
-        print(f"4: Extreme 一位 {get_status_str(diff_name='Extreme')}")
-        print(f"5: Hardcore 一位 {get_status_str(diff_name='Hardcore')}")
-        print(f"6: VeryHard 一位 {get_status_str(diff_name='VeryHard')}")
-        print(f"7: Hard 一位 {get_status_str(diff_name='Hard')}")
-        print(f"8: Normal 一位 {get_status_str(diff_name='Normal')}")
-        print(f"9: Normal 最下位 (＝総参加者数) {get_status_str(is_normal_bottom=True)}")
-        print(f"10: チナトロボーダー (20,000位) {get_status_str(border_rank=20000)}")
-        print(f"11: ゴルドロボーダー (120,000位) {get_status_str(border_rank=120000)}")
-        print(f"12: シルトロボーダー (240,000位) {get_status_str(border_rank=240000)}")
+        print(get_menu_line(1, diff_name="Lunatic"))
+        print(get_menu_line(2, diff_name="Torment"))
+        print(get_menu_line(3, diff_name="Insane"))
+        print(get_menu_line(4, diff_name="Extreme"))
+        print(get_menu_line(5, diff_name="Hardcore"))
+        print(get_menu_line(6, diff_name="VeryHard"))
+        print(get_menu_line(7, diff_name="Hard"))
+        print(get_menu_line(8, diff_name="Normal"))
+        print(get_menu_line(9, is_normal_bottom=True))
+        print(get_menu_line(10, border_rank=20000))
+        print(get_menu_line(11, border_rank=120000))
+        print(get_menu_line(12, border_rank=240000))
         print("13: 確定してデータ生成・保存へ進む")
         print("14: 中断してメニューに戻る")
 
@@ -538,18 +533,18 @@ def input_boundary_ranks_flow():
             d_idx = int(menu_choice) - 1
             target_name = f"{diffs[d_idx]} 一位"
         elif menu_choice == '9':
-            target_name = "Normal 最下位 (＝総参加者数)"
+            target_name = "総参加者数"
         elif menu_choice == '10':
             target_rank = 20000
-            target_name = "チナトロボーダー (20,000位)"
+            target_name = "チナトロボーダー 20,000位"
             is_fixed_rank = True
         elif menu_choice == '11':
             target_rank = 120000
-            target_name = "ゴルドロボーダー (120,000位)"
+            target_name = "ゴルドロボーダー 120,000位"
             is_fixed_rank = True
         elif menu_choice == '12':
             target_rank = 240000
-            target_name = "シルトロボーダー (240,000位)"
+            target_name = "シルトロボーダー 240,000位"
             is_fixed_rank = True
         else:
             print("[WARNING] 無効な選択です。")
