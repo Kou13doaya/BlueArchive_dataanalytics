@@ -417,11 +417,12 @@ def input_boundary_ranks_flow():
     temp_entries = {}
     
     # 既存データの `boundary` と `ocr` 状態のものを引き継ぐ
+    # status列がない、あるいは欠損している場合は、scoreが存在すれば 'ocr' 扱いとする
     for r, row in df.iterrows():
-        st = row.get('status', None)
         sc = row.get('score', None)
-        if not pd.isna(sc) and not pd.isna(st):
-            st_str = str(st)
+        if not pd.isna(sc):
+            st = row.get('status', None)
+            st_str = str(st) if (not pd.isna(st) and st is not None) else 'ocr'
             if st_str in ['ocr', 'boundary']:
                 temp_entries[int(r)] = (int(sc), st_str)
 
