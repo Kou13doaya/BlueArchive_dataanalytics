@@ -424,22 +424,99 @@ def input_boundary_ranks_flow():
             if st_str in ['ocr', 'boundary']:
                 temp_entries[int(r)] = (int(sc), st_str)
 
+    # 既存データ（OCR等）から難易度の一位およびボーダーのスコアを自動検出する処理
+    # イベントIDの抽出
+    event_id = re.sub(r'^rank_data_', '', re.sub(r'\.parquet$', '', selected_file)) if choice_idx != 0 else ""
+    event_id = normalize_event_id(event_id)
+    meta = EVENT_META.get(event_id)
+    boss_name = meta["boss"] if meta else "ビナー"
+    
+    limit_sec = 240
+    if boss_name in ["KAITEN FX Mk.0", "ビナー"]:
+        limit_sec = 180
+    elif boss_name in ["イェソド", "ドラム缶ガニ"]:
+        limit_sec = 270
+    limit_type = limit_sec / 60.0
+    
+    if limit_type == 3.0:
+        thresholds = {
+            "Lunatic": 43235000, "Torment": 31076000, "Insane": 19249600, "Extreme": 9392000,
+            "Hardcore": 3832000, "VeryHard": 1916000, "Hard": 958000, "Normal": 479000
+        }
+    elif limit_type == 4.0:
+        thresholds = {
+            "Lunatic": 44025000, "Torment": 31708000, "Insane": 21016000, "Extreme": 10160000,
+            "Hardcore": 4216000, "VeryHard": 2108000, "Hard": 1054000, "Normal": 527000
+        }
+    else:
+        thresholds = {
+            "Lunatic": 44664000, "Torment": 32502000, "Insane": 21741016, "Extreme": 10578880,
+            "Hardcore": 4437600, "VeryHard": 2218800, "Hard": 1109400, "Normal": 554700
+        }
+
     while True:
         print("\n--- 現在の登録状態 ---")
         
-        # 選択メニュー
-        print("1: Lunatic 一位")
-        print("2: Torment 一位")
-        print("3: Insane 一位")
-        print("4: Extreme 一位")
-        print("5: Hardcore 一位")
-        print("6: VeryHard 一位")
-        print("7: Hard 一位")
-        print("8: Normal 一位")
-        print("9: Normal 最下位 (＝総参加者数)")
-        print("10: チナトロボーダー (20,000位)")
-        print("11: ゴルドロボーダー (120,000位)")
-        print("12: シルトロボーダー (240,000位)")
+        # 登録済みの表示文字列を作成するヘルパー
+        def get_status_str(diff_name=None, border_rank=None, is_normal_bottom=False):
+            # 1. ユーザーがこのセッションで手動入力した、または既存の boundary/ocr データをチェック
+            if border_rank:
+                if border_rank in temp_entries:
+                    val, st = temp_entries[border_rank]
+                    return f"(登録済み: {val:,}点 [{st}])"
+                return "(未登録)"
+                
+            if is_normal_bottom:
+                # Normal最下位は temp_entries 内で最大の順位
+                # ただしボーダー(20k, 120k, 240k)以外の最大順位
+                candidates = [r for r in temp_entries.keys() if r not in [20000, 120000, 240000]]
+                if candidates:
+                    max_r = max(candidates)
+                    val, st = temp_entries[max_r]
+                    return f"(登録済み: {max_r:,}位 - {val:,}点 [{st}])"
+                return "(未登録)"
+
+            if diff_name:
+                # 難易度クリア境界（一位）の自動検出
+                # df または temp_entries の中から、基準スコア以上の最小順位（＝その難易度の一位）を割り出す
+                thresh = thresholds.get(diff_name, 0)
+                
+                # temp_entries から該当する最小順位を検索
+                valid_ranks = []
+                for r, (sc, st) in temp_entries.items():
+                    if sc >= thresh:
+                        # 1つ上の難易度の閾値があればそれ未満であることを条件にする（単体一位を正しく出すため）
+                        # ただし最上位難易度の場合は上限なし
+                        diff_idx = diffs.index(diff_name)
+                        if diff_idx == 0:
+                            valid_ranks.append((r, sc, st))
+                        else:
+                            prev_diff = diffs[diff_idx - 1]
+                            prev_thresh = thresholds.get(prev_diff, 999999999)
+                            if sc < prev_thresh:
+                                valid_ranks.append((r, sc, st))
+
+                if valid_ranks:
+                    # 順位が最小（＝一位）のもの
+                    valid_ranks.sort(key=lambda x: x[0])
+                    best_rank, best_score, st = valid_ranks[0]
+                    return f"(検出済み: {best_rank:,}位 - {best_score:,}点 [{st}])"
+                return "(未登録)"
+            return "(未登録)"
+
+        # 選択メニューと登録状態の表示
+        print(f"1: Lunatic 一位 {get_status_str(diff_name='Lunatic')}")
+        print(f"2: Torment 一位 {get_status_str(diff_name='Torment')}")
+        print(f"3: Insane 一位 {get_status_str(diff_name='Insane')}")
+        print(f"4: Extreme 一位 {get_status_str(diff_name='Extreme')}")
+        print(f"5: Hardcore 一位 {get_status_str(diff_name='Hardcore')}")
+        print(f"6: VeryHard 一位 {get_status_str(diff_name='VeryHard')}")
+        print(f"7: Hard 一位 {get_status_str(diff_name='Hard')}")
+        print(f"8: Normal 一位 {get_status_str(diff_name='Normal')}")
+        print(f"9: Normal 最下位 (＝総参加者数) {get_status_str(is_normal_bottom=True)}")
+        print(f"10: チナトロボーダー (20,000位) {get_status_str(border_rank=20000)}")
+        print(f"11: ゴルドロボーダー (120,000位) {get_status_str(border_rank=120000)}")
+        print(f"12: シルトロボーダー (240,000位) {get_status_str(border_rank=240000)}")
         print("13: 確定してデータ生成・保存へ進む")
         print("14: 中断してメニューに戻る")
 
