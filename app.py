@@ -708,8 +708,8 @@ else:
                     
                     default_time_bins = {
                         "Lunatic": 60.0,
-                        "Torment": 1.0,
-                        "Insane": 1.0,
+                        "Torment": 0.5,
+                        "Insane": 0.5,
                         "Extreme": 10.0,
                         "Hardcore": 10.0,
                         "VeryHard": 10.0,
@@ -762,7 +762,8 @@ else:
                                 compress_settings[zone] = base_score + (3600 - total_sec) * k
                                 
                                 default_bin_sec = default_time_bins[zone]
-                                time_bin = st.number_input("グラフ１本当たりの幅 (秒)", min_value=0.1, max_value=120.0, value=default_bin_sec, step=1.0 if default_bin_sec >= 1.0 else 0.5, key=f"{zone}_t_bin")
+                                step_val = 0.1 if zone in ["Torment", "Insane"] else (1.0 if default_bin_sec >= 1.0 else 0.5)
+                                time_bin = st.number_input("グラフ１本当たりの幅 (秒)", min_value=0.1, max_value=120.0, value=default_bin_sec, step=step_val, key=f"{zone}_t_bin")
                                 bin_settings[zone] = int(time_bin * k)
                                 
                 else:

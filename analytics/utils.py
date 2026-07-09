@@ -138,7 +138,7 @@ def get_rank_scores(df, event_id):
     キリの良い主要な順位のスコア一覧を取得します。総力戦の場合はクリアタイム等も追加します。
     """
     sorted_df = df.sort_values('score', ascending=False).reset_index(drop=True)
-    target_ranks = [1, 1000, 5000, 10000, 15000, 20000, 120000, 240000]
+    target_ranks = [1, 100, 500] + list(range(1000, 20001, 1000)) + [120000, 240000]
     data = []
     
     event_id = normalize_event_id(event_id)
