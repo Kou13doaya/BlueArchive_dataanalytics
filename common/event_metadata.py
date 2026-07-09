@@ -96,3 +96,36 @@ def get_display_name(event_id):
     if match_legacy:
         return f"S{match_legacy.group(2)}"
     return event_id
+
+def register_new_event(event_id, season, boss, period):
+    """
+    event_metadata.py の EVENT_META に新しいイベントメタデータを追加します。
+    """
+    import os
+    file_path = os.path.abspath(__file__)
+    with open(file_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # すでに登録されている場合はスキップ
+    if f'"{event_id}":' in content:
+        return False
+
+    # EVENT_META の閉じカッコの直前に挿入する
+    # EVENT_META定義の最初の "}" を対象とするため、全体を分割してマッチング
+    pattern = r'(EVENT_META\s*=\s*\{.*?)\n(\s*\})'
+    match = re.search(pattern, content, re.DOTALL)
+    if match:
+        prefix = match.group(1)
+        suffix = match.group(2)
+        new_entry = f'\n    "{event_id}": {{"season": "{season}", "boss": "{boss}", "period": "{period}"}},'
+        updated_meta = prefix + new_entry + "\n" + suffix
+        new_content = content.replace(match.group(0), updated_meta, 1)
+        
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(new_content)
+        
+        # グローバル変数にも反映
+        EVENT_META[event_id] = {"season": season, "boss": boss, "period": period}
+        return True
+    return False
+

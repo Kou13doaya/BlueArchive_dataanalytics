@@ -16,6 +16,140 @@ import numpy as np
 import easyocr
 from ocr_engine import TemplateParser
 from concurrent.futures import ThreadPoolExecutor
+from common.event_metadata import EVENT_META, normalize_event_id, register_new_event
+from common.wiki_scraper import scrape_event_info
+
+
+def check_and_register_season(target_event_id):
+    """
+    タイムスタンプを除いたベースイベントIDが登録されているか確認し、
+    未登録ならブルアカWikiから自動取得を試みた上で確認/手動登録を行います。
+    """
+    # タイムスタンプ部分を取り除く (例: total_assault_90_20260706_0345 -> total_assault_90)
+    base_event_id = normalize_event_id(re.sub(r'_\d{8}_\d{4}$|_(last)$', '', target_event_id))
+    
+    if base_event_id not in EVENT_META:
+        print(f"\n[INFO] 未登録のイベントID '{base_event_id}' を検出しました。")
+        print("Web (ブルアカ Wiki) からイベント情報を取得しています...")
+        scraped_info = scrape_event_info(base_event_id)
+        
+        boss = ""
+        period = ""
+        
+        if scraped_info:
+            scraped_boss, scraped_period = scraped_info
+            try:
+                print(f"取得結果 -> ボス: {scraped_boss}, 期間: {scraped_period}")
+            except Exception:
+                pass
+            
+            # コンソールへの出力用にエンコード対策
+            try:
+                choice = input(f"上記内容 (ボス: {scraped_boss}, 期間: {scraped_period}) で登録しますか？ (y/n): ").strip().lower()
+            except Exception:
+                choice = input("上記内容で登録しますか？ (y/n): ").strip().lower()
+                
+            if choice == 'y':
+                boss = scraped_boss
+                period = scraped_period
+        
+        if not boss or not period:
+            print("[INFO] 手動でイベント情報を登録します。")
+            boss = input("ボス名を入力してください (例: ビナー): ").strip()
+            period = input("開催期間を入力してください (例: 2026/07/15 ～ 2026/07/22): ").strip()
+            
+        if boss and period:
+            match_num = re.search(r'\d+', base_event_id)
+            season_num = match_num.group(0) if match_num else "00"
+            season_str = f"S{season_num}"
+            
+            success = register_new_event(base_event_id, season_str, boss, period)
+            if success:
+                print(f"[SUCCESS] 新しいイベント '{base_event_id}' を登録しました。")
+            else:
+                print(f"[WARNING] イベントの登録に失敗したか、既に登録されています。")
+
+
+def interactive_patch_missing_data(df_save):
+    """
+    DataFrameの欠損順位（NaN）に対して対話型で値を手動入力・補完します。
+    """
+    if df_save is None or df_save.empty:
+        return df_save
+        
+    df_save = df_save.sort_index()
+    
+    while True:
+        missing_ranks = df_save[df_save['score'].isna()].index.tolist()
+        if not missing_ranks:
+            print("[INFO] 欠損データ（抜け順位）はありません。")
+            break
+            
+        print(f"\n[WARNING] 現在 {len(missing_ranks)} 件の順位データが欠損しています。")
+        print(f"欠損順位リスト: {missing_ranks[:50]}" + ("..." if len(missing_ranks) > 50 else ""))
+        
+        choice = input("欠損データを手動で入力・補完しますか？ (y/n): ").strip().lower()
+        if choice != 'y':
+            break
+            
+        print("\n補完モードを選択してください:")
+        print("1: 1件ずつ対話入力（前後のスコア目安を表示）")
+        print("2: ま了て入力（'順位 スコア' の形式で複数行を貼り付け）")
+        mode = input("選択してください (1 or 2, 終了は Enter): ").strip()
+        
+        if mode == '1':
+            for r in missing_ranks:
+                prev_score = "不明"
+                next_score = "不明"
+                
+                for pr in range(r - 1, df_save.index.min() - 1, -1):
+                    if pr in df_save.index and not pd.isna(df_save.loc[pr, 'score']):
+                        prev_score = f"{int(df_save.loc[pr, 'score']):,}"
+                        break
+                for nr in range(r + 1, df_save.index.max() + 1):
+                    if nr in df_save.index and not pd.isna(df_save.loc[nr, 'score']):
+                        next_score = f"{int(df_save.loc[nr, 'score']):,}"
+                        break
+                        
+                print(f"\n順位 {r} (目安範囲: {prev_score} ～ {next_score})")
+                val_input = input("スコアを入力してください (スキップは Enter): ").strip()
+                if val_input:
+                    try:
+                        score_val = int(val_input)
+                        df_save.loc[r, 'score'] = score_val
+                        print(f"-> 順位 {r} にスコア {score_val} を設定しました。")
+                    except ValueError:
+                        print("[ERROR] 数値を入力してください。")
+                        
+        elif mode == '2':
+            print("\n'順位 スコア' の形式で1行ずつ入力または貼り付けしてください。")
+            print("入力が終わったら空行（Enterのみ）を入力してください。")
+            print("例:\n23 53726280\n32 53721864\n")
+            
+            while True:
+                line = input().strip()
+                if not line:
+                    break
+                parts = line.split()
+                if len(parts) == 2:
+                    try:
+                        r = int(parts[0])
+                        score_val = int(parts[1])
+                        if r not in df_save.index:
+                            new_min = min(df_save.index.min(), r)
+                            new_max = max(df_save.index.max(), r)
+                            full_index = pd.RangeIndex(start=new_min, stop=new_max + 1, name='rank')
+                            df_save = df_save.reindex(full_index)
+                        df_save.loc[r, 'score'] = score_val
+                        print(f"-> 順位 {r} にスコア {score_val} を設定しました。")
+                    except ValueError:
+                        print(f"[ERROR] 無効な入力行です: {line}")
+                else:
+                    print(f"[ERROR] 形式が違います。'順位 スコア' で入力してください: {line}")
+        else:
+            break
+            
+    return df_save
 
 
 class VideoOCRParser:
@@ -328,6 +462,9 @@ class VideoOCRParser:
             df_save = df_save.reindex(full_index)
             df_save['score'] = df_save['score'].astype(pd.Int32Dtype())
         
+        # 欠損データの対話型入力・補完
+        df_save = interactive_patch_missing_data(df_save)
+        
         os.makedirs(self.data_dir, exist_ok=True)
         save_path = os.path.join(self.data_dir, f"rank_data_{event_id}.parquet")
         df_save.to_parquet(save_path, compression='zstd')
@@ -439,6 +576,9 @@ if __name__ == "__main__":
             
     print(f"[INFO] Selected Video: {target_video_path}")
     print(f"[INFO] Target Event ID: {target_event_id}")
+    
+    # 未登録シーズンのチェックと登録
+    check_and_register_season(target_event_id)
     
     video_ocr = VideoOCRParser(data_dir=args.outdir)
     video_ocr.process_and_save(target_video_path, target_event_id, sample_interval_sec=args.interval)
