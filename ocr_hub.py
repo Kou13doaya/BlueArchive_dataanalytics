@@ -350,6 +350,216 @@ def generate_visualization():
         print(f"[ERROR] グラフ生成中にエラーが発生しました: {e}")
 
 
+def input_boundary_ranks_flow():
+    """
+    ユーザーが各難易度の一位（順位・スコア）およびNormalの最下位（総参加者数）、
+    主要ボーダー（20,000位、120,000位、240,000位）を入力し、
+    間の区間を 'missing_interval' として埋めてParquetファイルを作成・更新する。
+    """
+    print("\n" + "="*50)
+    print(" 3. 難易度境界順位からのデータ生成・補完")
+    print("="*50)
+
+    data_dir = os.path.join(project_root, "rank_data")
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+
+    # ① 対象 Parquet ファイルの選択または新規作成
+    parquet_files = sorted([f for f in os.listdir(data_dir) if f.endswith(".parquet") and not f.endswith(".bak")])
+    print("編集または新規作成するデータを選択してください:")
+    print("0: [新規作成] 新しいシーズン・時間で作成")
+    for idx, f in enumerate(parquet_files, 1):
+        print(f"{idx}: {f}")
+
+    while True:
+        choice = input(f"番号を選択してください (0-{len(parquet_files)}, 終了は Enter): ").strip()
+        if not choice:
+            return
+        try:
+            choice_idx = int(choice)
+            if 0 <= choice_idx <= len(parquet_files):
+                break
+            else:
+                print(f"0 から {len(parquet_files)} の範囲で入力してください。")
+        except ValueError:
+            print("有効な数値を入力してください。")
+
+    if choice_idx == 0:
+        # 新規作成の場合、イベントID（および時間など）を入力
+        print("\n[新規作成] イベントIDを入力してください (例: total_assault_90_last, grand_assault_34_20260707_0120)")
+        while True:
+            new_event_id = input("イベントID: ").strip()
+            if new_event_id:
+                break
+            print("イベントIDは必須です。")
+        check_and_register_season(new_event_id)
+        file_path = os.path.join(data_dir, f"rank_data_{new_event_id}.parquet")
+        df = pd.DataFrame(columns=['score', 'status'])
+        df.index.name = 'rank'
+    else:
+        selected_file = parquet_files[choice_idx - 1]
+        file_path = os.path.join(data_dir, selected_file)
+        df = pd.read_parquet(file_path)
+        if 'status' not in df.columns:
+            df['status'] = pd.Series(dtype='string')
+        # status列の型を文字列にする
+        df['status'] = df['status'].astype(pd.StringDtype())
+        if 'score' in df.columns:
+            df['score'] = df['score'].astype(pd.Int32Dtype())
+
+    # ② 難易度・ボーダーの登録画面ループ
+    # 難易度リスト
+    diffs = ["Lunatic", "Torment", "Insane", "Extreme", "Hardcore", "VeryHard", "Hard", "Normal"]
+    
+    # ユーザーが入力した情報を一時保存する辞書
+    # キー: rank, 値: (score, status_label)
+    temp_entries = {}
+    
+    # 既存データの `boundary` と `ocr` 状態のものを引き継ぐ
+    for r, row in df.iterrows():
+        st = row.get('status', None)
+        sc = row.get('score', None)
+        if not pd.isna(sc):
+            if st in ['ocr', 'boundary']:
+                temp_entries[int(r)] = (int(sc), st)
+
+    while True:
+        print("\n--- 現在の登録状態 ---")
+        
+        # 選択メニュー
+        print("1: Lunatic 一位")
+        print("2: Torment 一位")
+        print("3: Insane 一位")
+        print("4: Extreme 一位")
+        print("5: Hardcore 一位")
+        print("6: VeryHard 一位")
+        print("7: Hard 一位")
+        print("8: Normal 一位")
+        print("9: Normal 最下位 (＝総参加者数)")
+        print("10: チナトロボーダー (20,000位)")
+        print("11: ゴルドロボーダー (120,000位)")
+        print("12: シルトロボーダー (240,000位)")
+        print("13: 確定してデータ生成・保存へ進む")
+        print("14: 中断してメニューに戻る")
+
+        menu_choice = input("項目を選択してください (1-14): ").strip()
+        if menu_choice == '14':
+            print("[INFO] 中断しました。")
+            return
+        elif menu_choice == '13':
+            break
+
+        # 入力処理
+        target_rank = None
+        target_name = ""
+        is_fixed_rank = False
+
+        if menu_choice in [str(i) for i in range(1, 9)]:
+            d_idx = int(menu_choice) - 1
+            target_name = f"{diffs[d_idx]} 一位"
+        elif menu_choice == '9':
+            target_name = "Normal 最下位 (＝総参加者数)"
+        elif menu_choice == '10':
+            target_rank = 20000
+            target_name = "チナトロボーダー (20,000位)"
+            is_fixed_rank = True
+        elif menu_choice == '11':
+            target_rank = 120000
+            target_name = "ゴルドロボーダー (120,000位)"
+            is_fixed_rank = True
+        elif menu_choice == '12':
+            target_rank = 240000
+            target_name = "シルトロボーダー (240,000位)"
+            is_fixed_rank = True
+        else:
+            print("[WARNING] 無効な選択です。")
+            continue
+
+        print(f"\n--- {target_name} の登録 ---")
+        if not is_fixed_rank:
+            rank_input = input("順位を入力してください: ").strip()
+            if not rank_input:
+                print("入力をキャンセルしました。")
+                continue
+            try:
+                target_rank = int(rank_input)
+                if target_rank <= 0:
+                    print("[ERROR] 順位は1以上である必要があります。")
+                    continue
+            except ValueError:
+                print("[ERROR] 数値を入力してください。")
+                continue
+
+        score_input = input("スコアを入力してください: ").strip()
+        if not score_input:
+            print("入力をキャンセルしました。")
+            continue
+        try:
+            target_score = int(score_input)
+            if target_score < 0:
+                print("[ERROR] スコアは0以上である必要があります。")
+                continue
+        except ValueError:
+            print("[ERROR] 数値を入力してください。")
+            continue
+
+        # 登録 (既存の 'ocr' を上書きするか確認)
+        if target_rank in temp_entries and temp_entries[target_rank][1] == 'ocr':
+            confirm = input(f"[WARNING] 順位 {target_rank} は既にOCR実測値が存在します。上書きしますか？ (y/n): ").strip().lower()
+            if confirm != 'y':
+                continue
+
+        temp_entries[target_rank] = (target_score, 'boundary')
+        print(f"-> {target_name} (順位: {target_rank}, スコア: {target_score}) を登録しました。")
+
+    # ③ データ生成（補完）処理
+    if not temp_entries:
+        print("[WARNING] 登録データがないため、保存をスキップしました。")
+        return
+
+    # Normal 最下位（総参加者数）が登録されているか確認
+    max_rank = max(temp_entries.keys())
+    print(f"\n[INFO] データ生成中 (最大順位: {max_rank})...")
+
+    # 1 から max_rank までの RangeIndex
+    new_index = pd.RangeIndex(start=1, stop=max_rank + 1, name='rank')
+    
+    # 既存の DataFrame の ocr データを優先的にマッピング
+    final_scores = {}
+    final_status = {}
+
+    # 元の DataFrame から ocr データを引き継ぐ
+    for r, row in df.iterrows():
+        if row.get('status') == 'ocr' and not pd.isna(row.get('score')):
+            final_scores[int(r)] = int(row['score'])
+            final_status[int(r)] = 'ocr'
+
+    # 手動入力した境界データをマッピング (ocr 優先のため、ocr がない場所のみ上書き)
+    for r, (sc, st) in temp_entries.items():
+        if final_status.get(r) != 'ocr':
+            final_scores[r] = sc
+            final_status[r] = st
+
+    # 間の区間を missing_interval で埋める
+    df_new = pd.DataFrame(index=new_index)
+    df_new['score'] = pd.Series(final_scores).reindex(new_index).astype(pd.Int32Dtype())
+    
+    # status 列の設定
+    status_series = pd.Series(final_status).reindex(new_index)
+    # 値がない（NaNの）行は全て 'missing_interval' にする
+    status_series = status_series.fillna('missing_interval')
+    df_new['status'] = status_series.astype(pd.StringDtype())
+
+    # 保存
+    df_new.to_parquet(file_path, compression='zstd')
+    print(f"[SUCCESS] 難易度境界データから生成し、保存しました: {os.path.basename(file_path)} (N={len(df_new)})")
+
+    # GitHub反映
+    choice = input("\n[PROMPT] このまま続けてGitHubへデータをアップデートしますか？ (y/n): ").strip().lower()
+    if choice == 'y':
+        push_to_github()
+
+
 def main_menu():
     while True:
         print("\n" + "="*50)
@@ -357,28 +567,31 @@ def main_menu():
         print("="*50)
         print("1: OCRの実行とデータ作成/補完")
         print("2: 複数OCR結果の統合")
-        print("3: 既存データの欠損補完")
-        print("4: GitHubへの数値データの自動アップデート")
-        print("5: 可視化グラフの生成")
-        print("6: 終了")
+        print("3: 難易度境界順位からのデータ生成・補完")
+        print("4: 既存データの欠損補完")
+        print("5: GitHubへの数値データの自動アップデート")
+        print("6: 可視化グラフの生成")
+        print("7: 終了")
         print("="*50)
         
-        choice = input("メニュー番号を選択してください (1-6): ").strip()
+        choice = input("メニュー番号を選択してください (1-7): ").strip()
         if choice == '1':
             run_ocr_pipeline()
         elif choice == '2':
             merge_ocr_results()
         elif choice == '3':
-            patch_existing_data()
+            input_boundary_ranks_flow()
         elif choice == '4':
-            push_to_github()
+            patch_existing_data()
         elif choice == '5':
-            generate_visualization()
+            push_to_github()
         elif choice == '6':
+            generate_visualization()
+        elif choice == '7':
             print("\nHubツールを終了します。お疲れ様でした！")
             break
         else:
-            print("[WARNING] 1から6の数値を入力してください。")
+            print("[WARNING] 1から7の数値を入力してください。")
 
 
 if __name__ == "__main__":

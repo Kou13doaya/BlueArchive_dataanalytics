@@ -73,14 +73,23 @@ def check_and_register_season(target_event_id):
 def interactive_patch_missing_data(df_save):
     """
     DataFrameの欠損順位（NaN）に対して対話型で値を手動入力・補完します。
+    'status' 列が 'missing_interval' になっている行は対話補完から除外（自動スキップ）されます。
     """
     if df_save is None or df_save.empty:
         return df_save
         
     df_save = df_save.sort_index()
     
+    # status列が存在し、'status' に値が入っているか確認
+    has_status = 'status' in df_save.columns
+    
     while True:
-        missing_ranks = df_save[df_save['score'].isna()].index.tolist()
+        if has_status:
+            # status が 'missing_interval' 以外の欠損行のみを抽出
+            missing_ranks = df_save[df_save['score'].isna() & (df_save['status'] != 'missing_interval')].index.tolist()
+        else:
+            missing_ranks = df_save[df_save['score'].isna()].index.tolist()
+            
         if not missing_ranks:
             print("[INFO] 欠損データ（抜け順位）はありません。")
             break
@@ -157,18 +166,26 @@ def merge_dataframes(df_a: pd.DataFrame, df_b: pd.DataFrame) -> pd.DataFrame:
     rank をインデックスとする2つの DataFrame を統合する。
 
     重複順位の競合解決ルール:
-      - スコアが一致 → そのまま採用
-      - 不一致 → 前後文脈で単調減少を維持できる候補を自動採用
+      - status が一方は 'ocr' で他方が 'ocr' 以外の場合 → 'ocr' の方を無条件で最優先採用
+      - 両方とも同じ優先度でスコアが一致 → そのまま採用
+      - 両方とも同じ優先度で不一致 → 前後文脈で単調減少を維持できる候補を自動採用
       - 両候補とも違反を生む場合 → ユーザーに選択を委ねる
 
     Args:
-        df_a: 既存の DataFrame（rank インデックス、score 列）
+        df_a: 既存の DataFrame（rank インデックス、score 列、status列も考慮）
         df_b: 新規の DataFrame（同形式）
 
     Returns:
-        統合後の DataFrame（min〜max を連番でインデックス、NaN あり）
+        統合後の DataFrame（min〜max を連番でインデックス、NaN あり、status列付き）
     """
-    # スコアを dict に展開して扱いやすくする
+    # statusの解決用マッピングを取得
+    status_a = {}
+    if 'status' in df_a.columns:
+        status_a = {r: st for r, st in df_a['status'].items() if not pd.isna(st)}
+    status_b = {}
+    if 'status' in df_b.columns:
+        status_b = {r: st for r, st in df_b['status'].items() if not pd.isna(st)}
+
     scores_a = {r: s for r, s in df_a['score'].items() if not pd.isna(s)}
     scores_b = {r: s for r, s in df_b['score'].items() if not pd.isna(s)}
 
@@ -176,25 +193,55 @@ def merge_dataframes(df_a: pd.DataFrame, df_b: pd.DataFrame) -> pd.DataFrame:
     overlap = sorted(set(scores_a.keys()) & set(scores_b.keys()))
 
     conflicts = []
-    for r in overlap:
-        if scores_a[r] != scores_b[r]:
-            conflicts.append(r)
+    # 競合のない順位、あるいは status 優先度で無条件決定できるものを先に解決
+    merged = {}
+    merged_status = {}
+
+    # statusの優先度: ocr (2) > boundary (1) > missing_interval (0) / None
+    def get_priority(st):
+        if st == 'ocr':
+            return 2
+        if st == 'boundary':
+            return 1
+        return 0
+
+    for r in all_ranks:
+        if r in scores_a and r in scores_b:
+            sa = scores_a[r]
+            sb = scores_b[r]
+            sta = status_a.get(r, None)
+            stb = status_b.get(r, None)
+            pa = get_priority(sta)
+            pb = get_priority(stb)
+
+            if sa == sb:
+                merged[r] = sa
+                # 優先度の高いステータスを採用
+                merged_status[r] = sta if pa >= pb else stb
+            else:
+                # スコア不一致
+                if pa > pb:
+                    # Aが優先度高 (例: AがocrでBがboundary/missing)
+                    merged[r] = sa
+                    merged_status[r] = sta
+                elif pb > pa:
+                    # Bが優先度高
+                    merged[r] = sb
+                    merged_status[r] = stb
+                else:
+                    # 優先度が同じなので競合解決へ
+                    conflicts.append(r)
+        elif r in scores_a:
+            merged[r] = scores_a[r]
+            if r in status_a:
+                merged_status[r] = status_a[r]
+        else:
+            merged[r] = scores_b[r]
+            if r in status_b:
+                merged_status[r] = status_b[r]
 
     if conflicts:
         print(f"\n[INFO] 重複区間に {len(conflicts)} 件のスコア不一致が見つかりました。")
-
-    # 競合を解決しながらマージ用辞書を構築
-    merged = {}
-    # まず競合のない順位を確定
-    for r in all_ranks:
-        if r in scores_a and r in scores_b:
-            if scores_a[r] == scores_b[r]:
-                merged[r] = scores_a[r]
-            # else: 後で競合解決
-        elif r in scores_a:
-            merged[r] = scores_a[r]
-        else:
-            merged[r] = scores_b[r]
 
     # 競合順位を単調減少制約で解決
     def _monotone_violations(candidate_dict):
@@ -217,11 +264,16 @@ def merge_dataframes(df_a: pd.DataFrame, df_b: pd.DataFrame) -> pd.DataFrame:
         trial_b[r] = scores_b[r]
         viol_b = _monotone_violations(trial_b)
 
+        sta = status_a.get(r, 'ocr')
+        stb = status_b.get(r, 'ocr')
+
         if viol_a < viol_b:
             merged[r] = scores_a[r]
+            merged_status[r] = sta
             print(f"  [AUTO] 順位 {r}: A={scores_a[r]:,} を自動採用（単調性違反 {viol_a} < {viol_b}）")
         elif viol_b < viol_a:
             merged[r] = scores_b[r]
+            merged_status[r] = stb
             print(f"  [AUTO] 順位 {r}: B={scores_b[r]:,} を自動採用（単調性違反 {viol_b} < {viol_a}）")
         else:
             # 引き分け → ユーザーに確認
@@ -230,24 +282,30 @@ def merge_dataframes(df_a: pd.DataFrame, df_b: pd.DataFrame) -> pd.DataFrame:
                 choice = input(f"  どちらを採用しますか？ (a/b, スキップは Enter): ").strip().lower()
                 if choice == 'a':
                     merged[r] = scores_a[r]
+                    merged_status[r] = sta
                     break
                 elif choice == 'b':
                     merged[r] = scores_b[r]
+                    merged_status[r] = stb
                     break
                 elif choice == '':
                     # スキップ: 元 A の値をとりあえず保持
                     merged[r] = scores_a[r]
+                    merged_status[r] = sta
                     print(f"  → A={scores_a[r]:,} を採用（スキップ）")
                     break
                 else:
                     print("  'a' か 'b' を入力してください。")
 
     # DataFrame に変換・reindex
-    min_r = min(merged.keys())
-    max_r = max(merged.keys())
+    min_r = min(merged.keys()) if merged else 1
+    max_r = max(merged.keys()) if merged else 1
     full_index = pd.RangeIndex(start=min_r, stop=max_r + 1, name='rank')
-    df_merged = pd.DataFrame({'score': merged}).reindex(full_index)
-    df_merged['score'] = df_merged['score'].astype(pd.Int32Dtype())
+    
+    # マージデータのDataFrame構築
+    df_merged = pd.DataFrame(index=full_index)
+    df_merged['score'] = pd.Series(merged).reindex(full_index).astype(pd.Int32Dtype())
+    df_merged['status'] = pd.Series(merged_status).reindex(full_index).astype(pd.StringDtype())
 
     return df_merged
 
@@ -562,6 +620,7 @@ class VideoOCRParser:
             full_index = pd.RangeIndex(start=min_r, stop=max_r + 1, name='rank')
             df_save = df_save.reindex(full_index)
             df_save['score'] = df_save['score'].astype(pd.Int32Dtype())
+            df_save['status'] = 'ocr'  # [NEW] 新規OCRデータはstatusを'ocr'とする
         
         # 欠損データの対話型入力・補完
         df_save = interactive_patch_missing_data(df_save)
