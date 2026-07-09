@@ -152,7 +152,108 @@ def interactive_patch_missing_data(df_save):
     return df_save
 
 
+def merge_dataframes(df_a: pd.DataFrame, df_b: pd.DataFrame) -> pd.DataFrame:
+    """
+    rank をインデックスとする2つの DataFrame を統合する。
+
+    重複順位の競合解決ルール:
+      - スコアが一致 → そのまま採用
+      - 不一致 → 前後文脈で単調減少を維持できる候補を自動採用
+      - 両候補とも違反を生む場合 → ユーザーに選択を委ねる
+
+    Args:
+        df_a: 既存の DataFrame（rank インデックス、score 列）
+        df_b: 新規の DataFrame（同形式）
+
+    Returns:
+        統合後の DataFrame（min〜max を連番でインデックス、NaN あり）
+    """
+    # スコアを dict に展開して扱いやすくする
+    scores_a = {r: s for r, s in df_a['score'].items() if not pd.isna(s)}
+    scores_b = {r: s for r, s in df_b['score'].items() if not pd.isna(s)}
+
+    all_ranks = sorted(set(scores_a.keys()) | set(scores_b.keys()))
+    overlap = sorted(set(scores_a.keys()) & set(scores_b.keys()))
+
+    conflicts = []
+    for r in overlap:
+        if scores_a[r] != scores_b[r]:
+            conflicts.append(r)
+
+    if conflicts:
+        print(f"\n[INFO] 重複区間に {len(conflicts)} 件のスコア不一致が見つかりました。")
+
+    # 競合を解決しながらマージ用辞書を構築
+    merged = {}
+    # まず競合のない順位を確定
+    for r in all_ranks:
+        if r in scores_a and r in scores_b:
+            if scores_a[r] == scores_b[r]:
+                merged[r] = scores_a[r]
+            # else: 後で競合解決
+        elif r in scores_a:
+            merged[r] = scores_a[r]
+        else:
+            merged[r] = scores_b[r]
+
+    # 競合順位を単調減少制約で解決
+    def _monotone_violations(candidate_dict):
+        """候補辞書から単調減少違反数を返す"""
+        sorted_items = sorted(candidate_dict.items())
+        violations = 0
+        for i in range(len(sorted_items) - 1):
+            if sorted_items[i][1] < sorted_items[i + 1][1]:
+                violations += 1
+        return violations
+
+    for r in conflicts:
+        # 候補 A を採用したとき
+        trial_a = dict(merged)
+        trial_a[r] = scores_a[r]
+        viol_a = _monotone_violations(trial_a)
+
+        # 候補 B を採用したとき
+        trial_b = dict(merged)
+        trial_b[r] = scores_b[r]
+        viol_b = _monotone_violations(trial_b)
+
+        if viol_a < viol_b:
+            merged[r] = scores_a[r]
+            print(f"  [AUTO] 順位 {r}: A={scores_a[r]:,} を自動採用（単調性違反 {viol_a} < {viol_b}）")
+        elif viol_b < viol_a:
+            merged[r] = scores_b[r]
+            print(f"  [AUTO] 順位 {r}: B={scores_b[r]:,} を自動採用（単調性違反 {viol_b} < {viol_a}）")
+        else:
+            # 引き分け → ユーザーに確認
+            print(f"\n  [CONFLICT] 順位 {r}: A={scores_a[r]:,}  B={scores_b[r]:,}")
+            while True:
+                choice = input(f"  どちらを採用しますか？ (a/b, スキップは Enter): ").strip().lower()
+                if choice == 'a':
+                    merged[r] = scores_a[r]
+                    break
+                elif choice == 'b':
+                    merged[r] = scores_b[r]
+                    break
+                elif choice == '':
+                    # スキップ: 元 A の値をとりあえず保持
+                    merged[r] = scores_a[r]
+                    print(f"  → A={scores_a[r]:,} を採用（スキップ）")
+                    break
+                else:
+                    print("  'a' か 'b' を入力してください。")
+
+    # DataFrame に変換・reindex
+    min_r = min(merged.keys())
+    max_r = max(merged.keys())
+    full_index = pd.RangeIndex(start=min_r, stop=max_r + 1, name='rank')
+    df_merged = pd.DataFrame({'score': merged}).reindex(full_index)
+    df_merged['score'] = df_merged['score'].astype(pd.Int32Dtype())
+
+    return df_merged
+
+
 class VideoOCRParser:
+
     def __init__(self, data_dir=".", use_gpu=False):
         self.data_dir = data_dir
         self.parser = TemplateParser(data_dir=data_dir)
@@ -467,18 +568,43 @@ class VideoOCRParser:
         
         os.makedirs(self.data_dir, exist_ok=True)
         save_path = os.path.join(self.data_dir, f"rank_data_{event_id}.parquet")
+        
+        # 既存 Parquet が存在する場合は統合 or 上書きを確認
+        if os.path.exists(save_path):
+            print(f"\n[PROMPT] '{save_path}' は既に存在します。")
+            print(f"  既存: {pd.read_parquet(save_path).shape[0]} 件  /  今回: {len(df_save)} 件")
+            while True:
+                choice = input("  y: 既存データに統合して上書き保存（推奨）  n: 既存を破棄して上書き  (y/n): ").strip().lower()
+                if choice == 'y':
+                    print("[INFO] 既存データと統合します...")
+                    existing_df = pd.read_parquet(save_path)
+                    if 'score' in existing_df.columns:
+                        existing_df['score'] = existing_df['score'].astype(pd.Int32Dtype())
+                    df_save = merge_dataframes(existing_df, df_save)
+                    # 統合後の欠損を再度補完
+                    df_save = interactive_patch_missing_data(df_save)
+                    break
+                elif choice == 'n':
+                    print("[INFO] 既存データを破棄して上書きします。")
+                    break
+                else:
+                    print("  'y' か 'n' を入力してください。")
+        
         df_save.to_parquet(save_path, compression='zstd')
         print(f"[SUCCESS] Video OCR processing complete. Saved to {save_path} (N={len(df_save)})")
         
         return df_save
 
+
 def parse_video_filename(video_path):
     """
-    Parse video filename based on pattern: [TorG][Season]_[Date]_[TimeOrLast]
+    Parse video filename based on pattern: [TorG][Season]_[Date]_[TimeOrLast][_DupNum]
+    The optional trailing _N (e.g. _1, _2) is captured but NOT included in the event_id,
+    so split recordings of the same event always map to the same Parquet file.
     Returns standard event_id if matched, otherwise None.
     """
     basename = os.path.splitext(os.path.basename(video_path))[0]
-    pattern = r"^(?P<type>[TG])(?P<season>\d+)_(?:(?P<date>\d{8})_(?P<time>\d{4})|(?P<last>last))$"
+    pattern = r"^(?P<type>[TG])(?P<season>\d+)_(?:(?P<date>\d{8})_(?P<time>\d{4})|(?P<last>last))(?:_(?P<dup>\d+))?$"
     match = re.match(pattern, basename)
     if not match:
         return None
@@ -487,6 +613,7 @@ def parse_video_filename(video_path):
     type_str = "total_assault" if gd["type"] == "T" else "grand_assault"
     season = gd["season"]
     
+    # dup (_1, _2, ...) は event_id に含めない
     if gd["last"]:
         event_id = f"{type_str}_{season}_last"
     else:

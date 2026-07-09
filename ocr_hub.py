@@ -15,7 +15,12 @@ ocr_dir = os.path.join(project_root, "OCR")
 if ocr_dir not in sys.path:
     sys.path.append(ocr_dir)
 
-from OCR.video_ocr_parser import interactive_patch_missing_data, check_and_register_season
+from OCR.video_ocr_parser import (
+    interactive_patch_missing_data,
+    check_and_register_season,
+    merge_dataframes,
+    parse_video_filename,
+)
 
 
 def run_ocr_pipeline():
@@ -39,6 +44,162 @@ def run_ocr_pipeline():
         return
 
     # OCRと補完が完了した後、GitHubへアップロードするか確認
+    choice = input("\n[PROMPT] このまま続けてGitHubへデータをアップデートしますか？ (y/n): ").strip().lower()
+    if choice == 'y':
+        push_to_github()
+
+
+
+def merge_ocr_results():
+    """
+    既存の Parquet をベースとして、関連する動画を追加 OCR し統合します。
+    """
+    print("\n" + "="*50)
+    print(" 2. 複数OCR結果の統合")
+    print("="*50)
+
+    data_dir = os.path.join(project_root, "rank_data")
+    video_dir = os.path.join(project_root, "OCR", "video")
+
+    if not os.path.exists(data_dir):
+        print(f"[ERROR] データディレクトリが見つかりません: {data_dir}")
+        return
+
+    parquet_files = sorted([f for f in os.listdir(data_dir) if f.endswith(".parquet") and not f.endswith(".bak")])
+    if not parquet_files:
+        print("[INFO] 統合対象の Parquet ファイルが見つかりません。")
+        return
+
+    # ベース Parquet の選択
+    print("\n統合先（ベース）の Parquet ファイルを選択してください:")
+    for idx, f in enumerate(parquet_files, 1):
+        print(f"{idx}: {f}")
+
+    while True:
+        choice = input(f"番号を選択してください (1-{len(parquet_files)}, 終了は Enter): ").strip()
+        if not choice:
+            return
+        try:
+            base_file = parquet_files[int(choice) - 1]
+            break
+        except (ValueError, IndexError):
+            print(f"1 から {len(parquet_files)} の範囲で入力してください。")
+
+    base_path = os.path.join(data_dir, base_file)
+    print(f"\n[INFO] ベースファイル: {base_file}")
+
+    # Parquet 名から event_id を逆算してビデオ候補を絞り込む
+    # 例: rank_data_total_assault_90_last.parquet -> total_assault_90_last
+    event_id_from_parquet = re.sub(r'^rank_data_', '', re.sub(r'\.parquet$', '', base_file))
+    # event_id -> ビデオファイル名プレフィックスに変換
+    # total_assault -> T, grand_assault -> G
+    vid_prefix = None
+    for prefix_key, vid_char in [("total_assault", "T"), ("grand_assault", "G")]:
+        if event_id_from_parquet.startswith(prefix_key + "_"):
+            rest = event_id_from_parquet[len(prefix_key) + 1:]  # 例: 90_last
+            vid_prefix = f"{vid_char}{rest}"  # 例: T90_last
+            break
+
+    # 動画フォルダが存在する場合のみ候補を表示
+    candidate_videos = []
+    if vid_prefix and os.path.exists(video_dir):
+        all_videos = [f for f in os.listdir(video_dir) if f.lower().endswith(".mp4")]
+        for v in all_videos:
+            ev_id = parse_video_filename(os.path.join(video_dir, v))
+            if ev_id == event_id_from_parquet:
+                candidate_videos.append((v, os.path.join(video_dir, v)))
+        candidate_videos.sort(key=lambda x: x[0])
+
+    if not candidate_videos:
+        print(f"[INFO] OCR/video/ 内に '{vid_prefix}*' に一致する動画ファイルが見つかりませんでした。")
+        print("       動画ファイルを OCR/video/ フォルダに配置してから再試行してください。")
+        return
+
+    print(f"\n以下の動画が '{base_file}' に統合できる候補として見つかりました:")
+    for idx, (name, _) in enumerate(candidate_videos, 1):
+        print(f"  {idx}: {name}")
+
+    print("追加でOCRして統合したい動画を選択してください（スペース区切りで複数可）。")
+    sel_input = input(f"番号を入力 (1-{len(candidate_videos)}, 終了は Enter): ").strip()
+    if not sel_input:
+        print("[INFO] キャンセルしました。")
+        return
+
+    sel_indices = []
+    for tok in sel_input.split():
+        try:
+            idx = int(tok) - 1
+            if 0 <= idx < len(candidate_videos):
+                sel_indices.append(idx)
+            else:
+                print(f"[WARNING] 範囲外の番号をスキップ: {tok}")
+        except ValueError:
+            print(f"[WARNING] 無効な入力をスキップ: {tok}")
+
+    if not sel_indices:
+        print("[INFO] 有効な選択がありませんでした。")
+        return
+
+    selected_videos = [candidate_videos[i] for i in sel_indices]
+
+    # ベース Parquet を読み込む
+    print(f"\n[INFO] ベースデータを読み込んでいます: {base_file}")
+    df_base = pd.read_parquet(base_path)
+    if 'score' in df_base.columns:
+        df_base['score'] = df_base['score'].astype(pd.Int32Dtype())
+
+    # 各動画を OCR してマージ
+    parser_path = os.path.join(project_root, "OCR", "video_ocr_parser.py")
+    for name, vid_path in selected_videos:
+        print(f"\n{'='*50}")
+        print(f"[INFO] OCR 実行中: {name}")
+        print(f"{'='*50}")
+
+        # video_ocr_parser.py を subprocess 実行（統合フラグを渡す）
+        # ただし process_and_save の既存ファイル上書き挙動を避けるため
+        # ここでは VideoOCRParser を直接インポートして利用する
+        try:
+            # 動的インポート（subprocess 回避）
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("video_ocr_parser", parser_path)
+            vop_module = importlib.util.load_module_from_spec(spec) if hasattr(importlib.util, 'load_module_from_spec') else None
+
+            # 標準 import に切り替え
+            from OCR.video_ocr_parser import VideoOCRParser
+            parser = VideoOCRParser(data_dir=data_dir)
+
+            rows = parser.parse_video(vid_path, sample_interval_sec=0.1)
+            if not rows:
+                print(f"[WARNING] {name} からデータが取得できませんでした。スキップします。")
+                continue
+
+            cleaned = parser.clean_anomalies(rows)
+            validated = parser.parser.validate_scores(cleaned)
+
+            import pandas as _pd
+            df_new = _pd.DataFrame(validated).set_index('rank')[['score']]
+            if not df_new.empty:
+                min_r = df_new.index.min()
+                max_r = df_new.index.max()
+                df_new = df_new.reindex(_pd.RangeIndex(start=min_r, stop=max_r + 1, name='rank'))
+                df_new['score'] = df_new['score'].astype(_pd.Int32Dtype())
+
+            print(f"[INFO] {name} の OCR 完了 ({len(df_new)} 件)。ベースデータと統合します...")
+            df_base = merge_dataframes(df_base, df_new)
+
+        except Exception as e:
+            print(f"[ERROR] {name} の OCR 中にエラーが発生しました: {e}")
+            import traceback; traceback.print_exc()
+            continue
+
+    # 欠損補完
+    df_base = interactive_patch_missing_data(df_base)
+
+    # 上書き保存
+    df_base.to_parquet(base_path, compression='zstd')
+    print(f"\n[SUCCESS] 統合完了。{base_file} に上書き保存しました (N={len(df_base)})")
+
+    # GitHub push の確認
     choice = input("\n[PROMPT] このまま続けてGitHubへデータをアップデートしますか？ (y/n): ").strip().lower()
     if choice == 'y':
         push_to_github()
@@ -195,26 +356,29 @@ def main_menu():
         print("  ブルアカ データ解析・OCR管理 Hub")
         print("="*50)
         print("1: OCRの実行とデータ作成/補完")
-        print("2: 既存データの欠損補完")
-        print("3: GitHubへの数値データの自動アップデート")
-        print("4: 可視化グラフの生成")
-        print("5: 終了")
+        print("2: 複数OCR結果の統合")
+        print("3: 既存データの欠損補完")
+        print("4: GitHubへの数値データの自動アップデート")
+        print("5: 可視化グラフの生成")
+        print("6: 終了")
         print("="*50)
         
-        choice = input("メニュー番号を選択してください (1-5): ").strip()
+        choice = input("メニュー番号を選択してください (1-6): ").strip()
         if choice == '1':
             run_ocr_pipeline()
         elif choice == '2':
-            patch_existing_data()
+            merge_ocr_results()
         elif choice == '3':
-            push_to_github()
+            patch_existing_data()
         elif choice == '4':
-            generate_visualization()
+            push_to_github()
         elif choice == '5':
+            generate_visualization()
+        elif choice == '6':
             print("\nHubツールを終了します。お疲れ様でした！")
             break
         else:
-            print("[WARNING] 1から5の数値を入力してください。")
+            print("[WARNING] 1から6の数値を入力してください。")
 
 
 if __name__ == "__main__":
