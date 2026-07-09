@@ -419,9 +419,10 @@ def input_boundary_ranks_flow():
     for r, row in df.iterrows():
         st = row.get('status', None)
         sc = row.get('score', None)
-        if not pd.isna(sc):
-            if st in ['ocr', 'boundary']:
-                temp_entries[int(r)] = (int(sc), st)
+        if not pd.isna(sc) and not pd.isna(st):
+            st_str = str(st)
+            if st_str in ['ocr', 'boundary']:
+                temp_entries[int(r)] = (int(sc), st_str)
 
     while True:
         print("\n--- 現在の登録状態 ---")
