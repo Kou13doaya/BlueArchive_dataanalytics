@@ -127,7 +127,15 @@ def push_to_github():
         print("[INFO] ファイルを追加しています (git add)...")
         # rank_data内の変更されたすべてのParquetファイルを追加
         subprocess.run(["git", "add", "rank_data/*.parquet"], check=True)
+
+        # git diff --cached でコミット対象のステージされた変更があるか確認
+        check_diff = subprocess.run(["git", "diff", "--cached", "--quiet"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
+        # 戻り値が 0 の場合は変更（差分）がないことを意味します
+        if check_diff.returncode == 0:
+            print("\n[INFO] コミット対象の新しい数値データ（Parquet）の変更はありませんでした。")
+            return
+            
         # commit
         commit_msg = input("コミットメッセージを入力してください (デフォルト: 'update rank data'): ").strip()
         if not commit_msg:
