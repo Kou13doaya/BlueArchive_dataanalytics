@@ -21,6 +21,7 @@ from OCR.video_ocr_parser import (
     merge_dataframes,
     parse_video_filename,
 )
+from common.event_metadata import EVENT_META, normalize_event_id
 
 
 def run_ocr_pipeline():
