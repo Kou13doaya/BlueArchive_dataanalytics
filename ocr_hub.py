@@ -33,8 +33,16 @@ def run_ocr_pipeline():
         subprocess.run([sys.executable, parser_path], check=True)
     except subprocess.CalledProcessError as e:
         print(f"[ERROR] OCR実行中にエラーが発生しました: {e}")
+        return
     except KeyboardInterrupt:
         print("\n[INFO] OCRの実行が中断されました。")
+        return
+
+    # OCRと補完が完了した後、GitHubへアップロードするか確認
+    choice = input("\n[PROMPT] このまま続けてGitHubへデータをアップデートしますか？ (y/n): ").strip().lower()
+    if choice == 'y':
+        push_to_github()
+
 
 
 def patch_existing_data():
@@ -94,8 +102,14 @@ def patch_existing_data():
         # 保存
         df_patched.to_parquet(file_path, compression='zstd')
         print(f"[SUCCESS] データを更新して保存しました: {selected_file}")
+        
+        # 補完が完了した後、GitHubへアップロードするか確認
+        choice = input("\n[PROMPT] このまま続けてGitHubへデータをアップデートしますか？ (y/n): ").strip().lower()
+        if choice == 'y':
+            push_to_github()
     except Exception as e:
         print(f"[ERROR] データの処理中にエラーが発生しました: {e}")
+
 
 
 def push_to_github():
