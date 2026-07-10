@@ -74,18 +74,40 @@ def make_total_assault_summary(df, event_id):
         }
         
     diffs = ["Lunatic", "Torment", "Insane", "Extreme", "Hardcore", "VeryHard", "Hard", "Normal"]
+    
+    # 各難易度の一位（境界）の順位を特定
+    st_col = df['status'] if 'status' in df.columns else pd.Series('ocr', index=df.index)
+    valid_df = df[(st_col.isin(['ocr', 'boundary'])) & (df['score'].notna())]
+    
+    first_ranks = {}
+    for diff in diffs:
+        score_thresh = thresholds[diff]
+        matching = valid_df[valid_df['score'] >= score_thresh]
+        if not matching.empty:
+            first_ranks[diff] = matching.index.min()
+            
     summary_data = []
     
     for idx, diff in enumerate(diffs):
-        score_thresh = thresholds[diff]
-        cum_count = len(df[df['score'] >= score_thresh])
+        this_first = first_ranks.get(diff, None)
         
-        if idx == 0:
-            single_count = cum_count
+        if this_first is None:
+            single_count = 0
+            cum_count = 0
         else:
-            prev_diff = diffs[idx - 1]
-            prev_thresh = thresholds[prev_diff]
-            single_count = len(df[(df['score'] >= score_thresh) & (df['score'] < prev_thresh)])
+            # 次の難易度の一位順位を探す
+            next_first = None
+            for next_diff in diffs[idx + 1:]:
+                if next_diff in first_ranks:
+                    next_first = first_ranks[next_diff]
+                    break
+            
+            if next_first is not None:
+                cum_count = next_first - 1
+            else:
+                cum_count = df.index.max()
+                
+            single_count = max(0, cum_count - this_first + 1)
             
         summary_data.append({
             "難易度": diff,
@@ -96,11 +118,13 @@ def make_total_assault_summary(df, event_id):
 
 def make_grand_assault_summary(df):
     """
-    大決戦用の数値簡易表データフレームを作成します (クリア人数のみ)。
+    大決戦用の数値簡易表データフレームを作成します (順位基準)。
     """
-    high_count = len(df[df['score'] >= 73740000])
-    mid_count = len(df[(df['score'] >= 41336000) & (df['score'] < 73740000)])
-    low_count = len(df[df['score'] < 41336000])
+    max_rank = df.index.max() if (df is not None and not df.empty) else 0
+    
+    high_count = min(20000, max_rank)
+    mid_count = max(0, min(120000, max_rank) - high_count)
+    low_count = max(0, max_rank - 120000)
     
     summary_data = [
         {"スコア帯ブロック": "High (TTT ~ TII)", "プレイヤー数": f"{high_count:,} 人"},
