@@ -521,9 +521,9 @@ else:
     gold_score = sorted_df.iloc[119999]['score'] if len(sorted_df) > 119999 else None
     silver_score = sorted_df.iloc[239999]['score'] if len(sorted_df) > 239999 else None
     
-    plat_score_str = f"{int(plat_score):,}" if plat_score is not None else "データ不足"
-    gold_score_str = f"{int(gold_score):,}" if gold_score is not None else "データ不足"
-    silver_score_str = f"{int(silver_score):,}" if silver_score is not None else "データ不足"
+    plat_score_str = f"{int(plat_score):,}" if (plat_score is not None and not pd.isna(plat_score)) else "データ不足"
+    gold_score_str = f"{int(gold_score):,}" if (gold_score is not None and not pd.isna(gold_score)) else "データ不足"
+    silver_score_str = f"{int(silver_score):,}" if (silver_score is not None and not pd.isna(silver_score)) else "データ不足"
 
     # ====================================================
     # 2. チナトロ・ゴルドロ・シルトロボーダー (上から2番目 - 横並びカード)
@@ -540,7 +540,7 @@ else:
                 st.markdown("**チナトロボーダー**")
                 st.markdown("<small>(上位20,000人)</small>", unsafe_allow_html=True)
                 st.markdown(f"### {plat_score_str}")
-                if app_mode.startswith("総力戦") and plat_score is not None:
+                if app_mode.startswith("総力戦") and plat_score is not None and not pd.isna(plat_score):
                     diff, t_sec = score_to_clear_time(plat_score, event_id)
                     t_str = format_time_short(t_sec)
                     st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
@@ -555,7 +555,7 @@ else:
                 st.markdown("**ゴルドロボーダー**")
                 st.markdown("<small>(上位120,000人)</small>", unsafe_allow_html=True)
                 st.markdown(f"### {gold_score_str}")
-                if app_mode.startswith("総力戦") and gold_score is not None:
+                if app_mode.startswith("総力戦") and gold_score is not None and not pd.isna(gold_score):
                     diff, t_sec = score_to_clear_time(gold_score, event_id)
                     t_str = format_time_short(t_sec)
                     st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
@@ -570,7 +570,7 @@ else:
                 st.markdown("**シルトロボーダー**")
                 st.markdown("<small>(上位240,000人)</small>", unsafe_allow_html=True)
                 st.markdown(f"### {silver_score_str}")
-                if app_mode.startswith("総力戦") and silver_score is not None:
+                if app_mode.startswith("総力戦") and silver_score is not None and not pd.isna(silver_score):
                     diff, t_sec = score_to_clear_time(silver_score, event_id)
                     t_str = format_time_short(t_sec)
                     st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
