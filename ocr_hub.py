@@ -605,7 +605,8 @@ def input_boundary_ranks_flow():
 
     # 元の DataFrame から ocr データを引き継ぐ
     for r, row in df.iterrows():
-        if row.get('status') == 'ocr' and not pd.isna(row.get('score')):
+        st_val = row.get('status')
+        if not pd.isna(st_val) and str(st_val) == 'ocr' and not pd.isna(row.get('score')):
             final_scores[int(r)] = int(row['score'])
             final_status[int(r)] = 'ocr'
 
