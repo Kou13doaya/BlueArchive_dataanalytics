@@ -597,17 +597,33 @@ else:
     total_ocr_count = len(df[df['status'] == 'ocr']) if 'status' in df.columns else len(df)
     
     # 総参加者数の取得 (boundary_total)
+    show_participants = False
     total_participants = None
     if 'status' in df.columns:
+        # boundary_total があるか確認
         total_rows = df[df['status'] == 'boundary_total']
         if not total_rows.empty:
             total_participants = total_rows.index.max()
-    if total_participants is None:
+            show_participants = True
+        else:
+            # なければ status == 'ocr' の最大順位
+            ocr_rows = df[df['status'] == 'ocr']
+            if not ocr_rows.empty:
+                total_participants = ocr_rows.index.max()
+                show_participants = True
+    else:
+        # status列が無い場合、インデックスの最大値があれば表示
         total_participants = df.index.max() if not df.empty else 0
+        if total_participants > 0:
+            show_participants = True
+
+    participants_str = ""
+    if show_participants:
+        participants_str = f" &nbsp;&nbsp;|&nbsp;&nbsp; 総参加者数: {total_participants:,} 人"
 
     st.markdown(
         f"<h3 style='text-align: center; font-weight: bold; margin-top: 10px;'>"
-        f"取得上位データ総数: {total_ocr_count:,} 人 &nbsp;&nbsp;|&nbsp;&nbsp; 総参加者数: {total_participants:,} 人"
+        f"取得上位データ総数: {total_ocr_count:,} 人{participants_str}"
         f"</h3>",
         unsafe_allow_html=True
     )

@@ -416,14 +416,16 @@ def input_boundary_ranks_flow():
     # キー: rank, 値: (score, status_label)
     temp_entries = {}
     
-    # 既存データの `ocr` および手動入力の各状態を引き継ぐ
-    for r, row in df.iterrows():
-        sc = row.get('score', None)
-        if not pd.isna(sc):
-            st = row.get('status', None)
-            st_str = str(st) if (not pd.isna(st) and st is not None) else 'ocr'
-            if st_str in ['ocr', 'boundary', 'boundary_top', 'boundary_total', 'boundary_border']:
-                temp_entries[int(r)] = (int(sc), st_str)
+    # 既存データの `ocr` および手動入力の各状態を引き継ぐ（非ループ処理で超高速化）
+    if not df.empty:
+        st_series = df['status'].fillna('ocr') if 'status' in df.columns else pd.Series('ocr', index=df.index)
+        valid_rows = df[
+            st_series.isin(['ocr', 'boundary', 'boundary_top', 'boundary_total', 'boundary_border']) & 
+            df['score'].notna()
+        ]
+        # 有効な行だけをループ処理（通常数万件以下）するため一瞬で終わります
+        for r, row in valid_rows.iterrows():
+            temp_entries[int(r)] = (int(row['score']), str(row['status']) if ('status' in df.columns and not pd.isna(row['status'])) else 'ocr')
 
     # 既存データ（OCR等）から難易度の一位およびボーダーのスコアを自動検出する処理
     # イベントIDの抽出
@@ -610,12 +612,13 @@ def input_boundary_ranks_flow():
     final_scores = {}
     final_status = {}
 
-    # 元の DataFrame から ocr データを引き継ぐ
-    for r, row in df.iterrows():
-        st_val = row.get('status')
-        if not pd.isna(st_val) and str(st_val) == 'ocr' and not pd.isna(row.get('score')):
-            final_scores[int(r)] = int(row['score'])
-            final_status[int(r)] = 'ocr'
+    # 元の DataFrame から ocr データを引き継ぐ（非ループ処理で超高速化）
+    if not df.empty:
+        st_series = df['status'].fillna('ocr') if 'status' in df.columns else pd.Series('ocr', index=df.index)
+        ocr_df = df[(st_series == 'ocr') & (df['score'].notna())]
+        # ベクトル化して辞書化
+        final_scores = {int(r): int(sc) for r, sc in zip(ocr_df.index, ocr_df['score'])}
+        final_status = {int(r): 'ocr' for r in final_scores.keys()}
 
     # 手動入力した境界データをマッピング (ocr 優先のため、ocr がない場所のみ上書き)
     # boundary_total は Parquet には保存しない
