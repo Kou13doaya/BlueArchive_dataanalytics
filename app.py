@@ -543,12 +543,6 @@ else:
     if total_participants is None:
         total_participants = df.index.max() if not df.empty else None
 
-    total_score_str = "データ不足"
-    total_score = None
-    if total_participants in df.index:
-        total_score = df.loc[total_participants]['score']
-        if not pd.isna(total_score) and total_score is not None:
-            total_score_str = f"{int(total_score):,}"
 
     # ====================================================
     # 2. チナトロ・ゴルドロ・シルトロボーダー (上から2番目 - 横並びカード)
@@ -602,6 +596,7 @@ else:
         
     total_ocr_count = len(df[df['status'] == 'ocr']) if 'status' in df.columns else len(df)
     
+    # 総参加者数の取得 (boundary_total)
     total_participants = None
     if 'status' in df.columns:
         total_rows = df[df['status'] == 'boundary_total']
