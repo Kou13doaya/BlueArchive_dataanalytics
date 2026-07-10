@@ -84,9 +84,15 @@ def make_total_assault_summary(df, event_id):
     valid_df = df[(st_col.isin(['ocr', 'boundary'])) & (df['score'].notna())]
     
     first_ranks = {}
-    for diff in diffs:
+    for idx, diff in enumerate(diffs):
         score_thresh = thresholds[diff]
-        matching = valid_df[valid_df['score'] >= score_thresh]
+        if idx == 0:
+            matching = valid_df[valid_df['score'] >= score_thresh]
+        else:
+            prev_diff = diffs[idx - 1]
+            prev_thresh = thresholds[prev_diff]
+            matching = valid_df[(valid_df['score'] >= score_thresh) & (valid_df['score'] < prev_thresh)]
+            
         if not matching.empty:
             first_ranks[diff] = matching.index.min()
             
