@@ -661,8 +661,44 @@ def input_boundary_ranks_flow():
         print("[WARNING] 登録データがないため、保存をスキップしました。")
         return
 
-    # Normal 最下位（総参加者数）が登録されているか確認
-    max_rank = max(temp_entries.keys())
+    # boundary_total が登録されているか確認
+    total_ranks = [r for r, (sc, st) in temp_entries.items() if st == 'boundary_total']
+    total_rank = total_ranks[0] if total_ranks else None
+    
+    if total_rank is not None:
+        # 総参加者数より大きい順位に、有効なデータが存在するか確認
+        df_after_limit = pd.DataFrame()
+        if not df.empty:
+            st_series = df['status'].fillna('ocr') if 'status' in df.columns else pd.Series('ocr', index=df.index)
+            df_after_limit = df[
+                (df.index > total_rank) & 
+                (st_series.isin(['ocr', 'boundary', 'boundary_top', 'boundary_total', 'boundary_border'])) & 
+                (df['score'].notna())
+            ]
+        
+        temp_after_limit = {
+            r: (sc, st) for r, (sc, st) in temp_entries.items() 
+            if r > total_rank and st != 'missing_interval'
+        }
+        
+        has_active_data = (not df_after_limit.empty) or len(temp_after_limit) > 0
+        if has_active_data:
+            print(f"\n[WARNING] 登録された総参加者数 ({total_rank:,}位) より後ろに、有効なデータが存在します:")
+            for r, row in df_after_limit.iterrows():
+                print(f"  - {r:,}位: {int(row['score']):,}点 [{row.get('status', 'ocr')}]")
+            for r, (sc, st) in temp_after_limit.items():
+                print(f"  - {r:,}位: {sc:,}点 [{st}] (新規手動入力)")
+                
+            confirm = input("このまま後ろのデータをすべて削除して保存しますか？ (y/n): ").strip().lower()
+            if confirm != 'y':
+                print("[INFO] 保存をキャンセルしました。")
+                return
+
+        # 承認された場合は総参加者数を上限にする
+        max_rank = total_rank
+    else:
+        max_rank = max(temp_entries.keys())
+
     print(f"\n[INFO] データ生成中 (最大順位: {max_rank})...")
 
     # 1 から max_rank までの RangeIndex
