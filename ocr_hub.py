@@ -515,15 +515,63 @@ def input_boundary_ranks_flow():
         print(get_menu_line(10, border_rank=20000))
         print(get_menu_line(11, border_rank=120000))
         print(get_menu_line(12, border_rank=240000))
-        print("13: 確定してデータ生成・保存へ進む")
-        print("14: 中断してメニューに戻る")
+        print("13: 登録データを削除する")
+        print("14: 確定してデータ生成・保存へ進む")
+        print("15: 中断してメニューに戻る")
 
-        menu_choice = input("項目を選択してください (1-14): ").strip()
-        if menu_choice == '14':
+        menu_choice = input("項目を選択してください (1-15): ").strip()
+        if menu_choice == '15':
             print("[INFO] 中断しました。")
             return
-        elif menu_choice == '13':
+        elif menu_choice == '14':
             break
+        elif menu_choice == '13':
+            # 削除処理
+            print("\n--- 登録データの削除 ---")
+            del_choice = input("削除したい項目の番号を入力してください (1-12): ").strip()
+            
+            target_rank_to_del = None
+            target_name_to_del = ""
+            
+            if del_choice in [str(i) for i in range(1, 9)]:
+                d_idx = int(del_choice) - 1
+                diff_name = diffs[d_idx]
+                target_name_to_del = f"{diff_name} 一位"
+                thresh = thresholds.get(diff_name, 0)
+                for r, (sc, st) in temp_entries.items():
+                    if sc >= thresh and st in ['boundary_top', 'boundary']:
+                        if d_idx == 0:
+                            target_rank_to_del = r
+                            break
+                        else:
+                            prev_diff = diffs[d_idx - 1]
+                            prev_thresh = thresholds.get(prev_diff, 999999999)
+                            if sc < prev_thresh:
+                                target_rank_to_del = r
+                                break
+            elif del_choice == '9':
+                target_name_to_del = "総参加者数"
+                for r, (sc, st) in temp_entries.items():
+                    if st in ['boundary_total', 'boundary']:
+                        if r not in [20000, 120000, 240000]:
+                            target_rank_to_del = r
+                            break
+            elif del_choice == '10':
+                target_rank_to_del = 20000
+                target_name_to_del = "チナトロボーダー"
+            elif del_choice == '11':
+                target_rank_to_del = 120000
+                target_name_to_del = "ゴルドロボーダー"
+            elif del_choice == '12':
+                target_rank_to_del = 240000
+                target_name_to_del = "シルトロボーダー"
+                
+            if target_rank_to_del is not None and target_rank_to_del in temp_entries:
+                score_val, st_val = temp_entries.pop(target_rank_to_del)
+                print(f"-> {target_name_to_del} (順位: {target_rank_to_del:,}, スコア: {score_val:,}) の手動登録データを削除しました。")
+            else:
+                print("[WARNING] 該当の項目に手動登録されたデータが見つかりませんでした。")
+            continue
 
         # 入力処理
         target_rank = None
