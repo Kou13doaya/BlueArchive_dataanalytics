@@ -539,7 +539,7 @@ def input_boundary_ranks_flow():
                 target_name_to_del = f"{diff_name} 一位"
                 thresh = thresholds.get(diff_name, 0)
                 for r, (sc, st) in temp_entries.items():
-                    if sc >= thresh and st in ['boundary_top', 'boundary']:
+                    if sc >= thresh and st != 'ocr':
                         if d_idx == 0:
                             target_rank_to_del = r
                             break
@@ -551,11 +551,11 @@ def input_boundary_ranks_flow():
                                 break
             elif del_choice == '9':
                 target_name_to_del = "総参加者数"
-                for r, (sc, st) in temp_entries.items():
-                    if st in ['boundary_total', 'boundary']:
-                        if r not in [20000, 120000, 240000]:
-                            target_rank_to_del = r
-                            break
+                candidates = [r for r, (sc, st) in temp_entries.items() if r not in [20000, 120000, 240000]]
+                if candidates:
+                    max_r = max(candidates)
+                    if temp_entries[max_r][1] != 'ocr':
+                        target_rank_to_del = max_r
             elif del_choice == '10':
                 target_rank_to_del = 20000
                 target_name_to_del = "チナトロボーダー"
