@@ -147,14 +147,23 @@ def get_rank_scores(df, event_id):
     for rank in target_ranks:
         if rank <= len(sorted_df):
             score = sorted_df.iloc[rank - 1]['score']
-            row = {
-                "順位": f"{rank:,} 位",
-                "スコア": f"{int(score):,}"
-            }
-            if is_total_assault:
-                diff, t_sec = score_to_clear_time(score, event_id)
-                row["クリア難易度"] = diff
-                row["クリアタイム"] = format_time(t_sec)
+            if pd.isna(score) or score is None:
+                row = {
+                    "順位": f"{rank:,} 位",
+                    "スコア": "欠損"
+                }
+                if is_total_assault:
+                    row["クリア難易度"] = "不明"
+                    row["クリアタイム"] = "不明"
+            else:
+                row = {
+                    "順位": f"{rank:,} 位",
+                    "スコア": f"{int(score):,}"
+                }
+                if is_total_assault:
+                    diff, t_sec = score_to_clear_time(score, event_id)
+                    row["クリア難易度"] = diff
+                    row["クリアタイム"] = format_time(t_sec)
             data.append(row)
     return pd.DataFrame(data)
 
