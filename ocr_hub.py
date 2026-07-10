@@ -431,7 +431,9 @@ def input_boundary_ranks_flow():
     # イベントIDの抽出
     event_id = re.sub(r'^rank_data_', '', re.sub(r'\.parquet$', '', selected_file)) if choice_idx != 0 else ""
     event_id = normalize_event_id(event_id)
-    meta = EVENT_META.get(event_id)
+    # EVENT_META のキー（例: total_assault_90）にマッチさせるため、_last や日時suffixを除外する
+    lookup_id = re.sub(r'_(last|\d{8}_\d{4})$', '', event_id)
+    meta = EVENT_META.get(lookup_id) if EVENT_META.get(lookup_id) else EVENT_META.get(event_id)
     boss_name = meta["boss"] if meta else "ビナー"
     
     limit_sec = 240
