@@ -467,16 +467,25 @@ def input_boundary_ranks_flow():
                 b_name = border_names.get(border_rank, f"{border_rank}位ボーダー")
                 if border_rank in temp_entries:
                     val, st = temp_entries[border_rank]
-                    return f"{choice_num}: {b_name} {border_rank:,}位 - {val:,}点 (登録済み: [{st}])"
+                    if st in ['ocr', 'boundary_border', 'boundary']:
+                        status_label = "検出済み" if st == 'ocr' else "登録済み"
+                        return f"{choice_num}: {b_name} {border_rank:,}位 - {val:,}点 ({status_label}: [{st}])"
                 return f"{choice_num}: {b_name} {border_rank:,}位 (未登録)"
                 
             # 2. 総参加者数
             if is_normal_bottom:
-                candidates = [r for r in temp_entries.keys() if r not in [20000, 120000, 240000]]
-                if candidates:
-                    max_r = max(candidates)
-                    val, st = temp_entries[max_r]
-                    return f"{choice_num}: 総参加者数 {max_r:,}位 - {val:,}点 (登録済み: [{st}])"
+                # 明示的に boundary_total がある場合
+                total_ranks = [r for r, (sc, st) in temp_entries.items() if st == 'boundary_total']
+                if total_ranks:
+                    target_r = max(total_ranks)
+                    val, st = temp_entries[target_r]
+                    return f"{choice_num}: 総参加者数 {target_r:,}位 - {val:,}点 (登録済み: [{st}])"
+                else:
+                    ocr_candidates = [r for r, (sc, st) in temp_entries.items() if r not in [20000, 120000, 240000] and st == 'ocr']
+                    if ocr_candidates:
+                        target_r = max(ocr_candidates)
+                        val, st = temp_entries[target_r]
+                        return f"{choice_num}: 総参加者数 {target_r:,}位 - {val:,}点 (検出済み: [{st}])"
                 return f"{choice_num}: 総参加者数 (未登録)"
 
             # 3. 難易度一位
@@ -484,15 +493,16 @@ def input_boundary_ranks_flow():
                 thresh = thresholds.get(diff_name, 0)
                 valid_ranks = []
                 for r, (sc, st) in temp_entries.items():
-                    if sc >= thresh:
-                        diff_idx = diffs.index(diff_name)
-                        if diff_idx == 0:
-                            valid_ranks.append((r, sc, st))
-                        else:
-                            prev_diff = diffs[diff_idx - 1]
-                            prev_thresh = thresholds.get(prev_diff, 999999999)
-                            if sc < prev_thresh:
+                    if st in ['ocr', 'boundary_top', 'boundary']:
+                        if sc >= thresh:
+                            diff_idx = diffs.index(diff_name)
+                            if diff_idx == 0:
                                 valid_ranks.append((r, sc, st))
+                            else:
+                                prev_diff = diffs[diff_idx - 1]
+                                prev_thresh = thresholds.get(prev_diff, 999999999)
+                                if sc < prev_thresh:
+                                    valid_ranks.append((r, sc, st))
 
                 if valid_ranks:
                     valid_ranks.sort(key=lambda x: x[0])
@@ -500,7 +510,7 @@ def input_boundary_ranks_flow():
                     status_label = "検出済み" if st == 'ocr' else "登録済み"
                     return f"{choice_num}: {diff_name} {best_rank:,}位 - {best_score:,}点 ({status_label}: [{st}])"
                 return f"{choice_num}: {diff_name} 一位 (未登録)"
-            return ""
+            return "" 
 
         # 選択メニューと登録状態の表示
         print(get_menu_line(1, diff_name="Lunatic"))
