@@ -601,7 +601,15 @@ else:
                     st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
         
     total_ocr_count = len(df[df['status'] == 'ocr']) if 'status' in df.columns else len(df)
-    total_participants = df.index.max() if not df.empty else 0
+    
+    total_participants = None
+    if 'status' in df.columns:
+        total_rows = df[df['status'] == 'boundary_total']
+        if not total_rows.empty:
+            total_participants = total_rows.index.max()
+    if total_participants is None:
+        total_participants = df.index.max() if not df.empty else 0
+
     st.markdown(
         f"<h3 style='text-align: center; font-weight: bold; margin-top: 10px;'>"
         f"取得上位データ総数: {total_ocr_count:,} 人 &nbsp;&nbsp;|&nbsp;&nbsp; 総参加者数: {total_participants:,} 人"
