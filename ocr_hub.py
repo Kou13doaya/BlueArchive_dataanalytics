@@ -416,14 +416,13 @@ def input_boundary_ranks_flow():
     # キー: rank, 値: (score, status_label)
     temp_entries = {}
     
-    # 既存データの `boundary` と `ocr` 状態のものを引き継ぐ
-    # status列がない、あるいは欠損している場合は、scoreが存在すれば 'ocr' 扱いとする
+    # 既存データの `ocr` および手動入力の各状態を引き継ぐ
     for r, row in df.iterrows():
         sc = row.get('score', None)
         if not pd.isna(sc):
             st = row.get('status', None)
             st_str = str(st) if (not pd.isna(st) and st is not None) else 'ocr'
-            if st_str in ['ocr', 'boundary']:
+            if st_str in ['ocr', 'boundary', 'boundary_top', 'boundary_total', 'boundary_border']:
                 temp_entries[int(r)] = (int(sc), st_str)
 
     # 既存データ（OCR等）から難易度の一位およびボーダーのスコアを自動検出する処理
@@ -584,7 +583,15 @@ def input_boundary_ranks_flow():
             if confirm != 'y':
                 continue
 
-        temp_entries[target_rank] = (target_score, 'boundary')
+        # 登録時の status を項目ごとに細分化
+        if menu_choice in [str(i) for i in range(1, 9)]:
+            st_label = 'boundary_top'
+        elif menu_choice == '9':
+            st_label = 'boundary_total'
+        else:
+            st_label = 'boundary_border'
+
+        temp_entries[target_rank] = (target_score, st_label)
         print(f"-> {target_name} (順位: {target_rank}, スコア: {target_score}) を登録しました。")
 
     # ③ データ生成（補完）処理

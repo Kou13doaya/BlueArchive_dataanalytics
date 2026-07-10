@@ -81,7 +81,8 @@ def make_total_assault_summary(df, event_id):
     else:
         st_col = pd.Series('ocr', index=df.index)
         
-    valid_df = df[(st_col.isin(['ocr', 'boundary'])) & (df['score'].notna())]
+    # 難易度境界（一位）の決定には 'boundary_top' または 'ocr' のみを使用
+    valid_df = df[(st_col.isin(['ocr', 'boundary_top'])) & (df['score'].notna())]
     
     first_ranks = {}
     for idx, diff in enumerate(diffs):
@@ -97,6 +98,10 @@ def make_total_assault_summary(df, event_id):
             first_ranks[diff] = matching.index.min()
             
     summary_data = []
+    
+    # 総参加者数（boundary_total）が登録されているかチェック
+    total_entries = df[st_col == 'boundary_total']
+    total_limit = total_entries.index.max() if not total_entries.empty else df.index.max()
     
     for idx, diff in enumerate(diffs):
         this_first = first_ranks.get(diff, None)
@@ -115,7 +120,7 @@ def make_total_assault_summary(df, event_id):
             if next_first is not None:
                 cum_count = next_first - 1
             else:
-                cum_count = df.index.max()
+                cum_count = total_limit
                 
             single_count = max(0, cum_count - this_first + 1)
             
@@ -186,7 +191,7 @@ def get_rank_scores(df, event_id):
             st = row.get('status') if 'status' in df.columns else 'ocr'
             st_str = str(st) if (not pd.isna(st) and st is not None) else 'ocr'
             
-            if st_str in ['ocr', 'boundary'] and not pd.isna(score):
+            if st_str in ['ocr', 'boundary_top', 'boundary_border'] and not pd.isna(score):
                 row_data = {
                     "順位": f"{rank:,} 位",
                     "スコア": f"{int(score):,}"

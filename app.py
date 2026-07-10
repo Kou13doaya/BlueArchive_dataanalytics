@@ -522,7 +522,7 @@ else:
             row = df.loc[rank_val]
             st = row.get('status') if 'status' in df.columns else 'ocr'
             st_str = str(st) if (not pd.isna(st) and st is not None) else 'ocr'
-            if st_str in ['ocr', 'boundary']:
+            if st_str in ['ocr', 'boundary_border']:
                 return row['score']
         return None
 
@@ -534,10 +534,26 @@ else:
     gold_score_str = f"{int(gold_score):,}" if (gold_score is not None and not pd.isna(gold_score)) else "データ不足"
     silver_score_str = f"{int(silver_score):,}" if (silver_score is not None and not pd.isna(silver_score)) else "データ不足"
 
+    # 総参加者数の取得
+    total_participants = None
+    if 'status' in df.columns:
+        total_rows = df[df['status'] == 'boundary_total']
+        if not total_rows.empty:
+            total_participants = total_rows.index.max()
+    if total_participants is None:
+        total_participants = df.index.max() if not df.empty else None
+
+    total_score_str = "データ不足"
+    total_score = None
+    if total_participants in df.index:
+        total_score = df.loc[total_participants]['score']
+        if not pd.isna(total_score) and total_score is not None:
+            total_score_str = f"{int(total_score):,}"
+
     # ====================================================
     # 2. チナトロ・ゴルドロ・シルトロボーダー (上から2番目 - 横並びカード)
     # ====================================================
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         with st.container(border=True):
@@ -581,6 +597,21 @@ else:
                 st.markdown(f"### {silver_score_str}")
                 if app_mode.startswith("総力戦") and silver_score is not None and not pd.isna(silver_score):
                     diff, t_sec = score_to_clear_time(silver_score, event_id)
+                    t_str = format_time_short(t_sec)
+                    st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
+
+    with col4:
+        with st.container(border=True):
+            sub_img, sub_title = st.columns([1, 4])
+            with sub_img:
+                if os.path.exists("image/bronze.png"):
+                    st.image("image/bronze.png", width=35)
+            with sub_title:
+                st.markdown("**総参加者数**")
+                st.markdown(f"<small>(Normal最下位: {total_participants:,}位)</small>" if total_participants else "<small>(Normal最下位)</small>", unsafe_allow_html=True)
+                st.markdown(f"### {total_score_str}")
+                if app_mode.startswith("総力戦") and total_score is not None and not pd.isna(total_score):
+                    diff, t_sec = score_to_clear_time(total_score, event_id)
                     t_str = format_time_short(t_sec)
                     st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
         
@@ -994,7 +1025,7 @@ else:
         if 'score' in display_df.columns:
             display_df = display_df.rename(columns={'score': 'スコア'})
             
-        cols = ['順位'] + [c for c in display_df.columns if c not in ['順位']]
+        cols = ['順位'] + [c for c in display_df.columns if c not in ['順位', 'status']]
         display_df = display_df[cols]
         
         # Pandas Styler を用いてターゲット行を薄いゴールドでハイライト表示
