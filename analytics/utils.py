@@ -76,7 +76,11 @@ def make_total_assault_summary(df, event_id):
     diffs = ["Lunatic", "Torment", "Insane", "Extreme", "Hardcore", "VeryHard", "Hard", "Normal"]
     
     # 各難易度の一位（境界）の順位を特定
-    st_col = df['status'] if 'status' in df.columns else pd.Series('ocr', index=df.index)
+    if 'status' in df.columns:
+        st_col = df['status'].fillna('ocr')
+    else:
+        st_col = pd.Series('ocr', index=df.index)
+        
     valid_df = df[(st_col.isin(['ocr', 'boundary'])) & (df['score'].notna())]
     
     first_ranks = {}
