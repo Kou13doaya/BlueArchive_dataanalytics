@@ -145,26 +145,39 @@ def get_rank_scores(df, event_id):
     is_total_assault = event_id.startswith("total_assault_")
     
     for rank in target_ranks:
-        if rank <= len(sorted_df):
-            score = sorted_df.iloc[rank - 1]['score']
-            if pd.isna(score) or score is None:
-                row = {
-                    "順位": f"{rank:,} 位",
-                    "スコア": "欠損"
-                }
-                if is_total_assault:
-                    row["クリア難易度"] = "不明"
-                    row["クリアタイム"] = "不明"
-            else:
-                row = {
+        # 指定順位がデータフレームのインデックスに存在するかチェック
+        if rank in df.index:
+            row = df.loc[rank]
+            score = row['score']
+            st = row.get('status') if 'status' in df.columns else 'ocr'
+            st_str = str(st) if (not pd.isna(st) and st is not None) else 'ocr'
+            
+            if st_str in ['ocr', 'boundary'] and not pd.isna(score):
+                row_data = {
                     "順位": f"{rank:,} 位",
                     "スコア": f"{int(score):,}"
                 }
                 if is_total_assault:
                     diff, t_sec = score_to_clear_time(score, event_id)
-                    row["クリア難易度"] = diff
-                    row["クリアタイム"] = format_time(t_sec)
-            data.append(row)
+                    row_data["クリア難易度"] = diff
+                    row_data["クリアタイム"] = format_time(t_sec)
+            else:
+                row_data = {
+                    "順位": f"{rank:,} 位",
+                    "スコア": "欠損"
+                }
+                if is_total_assault:
+                    row_data["クリア難易度"] = "不明"
+                    row_data["クリアタイム"] = "不明"
+        else:
+            row_data = {
+                "順位": f"{rank:,} 位",
+                "スコア": "欠損"
+            }
+            if is_total_assault:
+                row_data["クリア難易度"] = "不明"
+                row_data["クリアタイム"] = "不明"
+        data.append(row_data)
     return pd.DataFrame(data)
 
 def find_nearest_player(df, target_score):

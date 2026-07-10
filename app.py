@@ -516,10 +516,19 @@ else:
     st.subheader(get_display_name(event_id))
     
     # 各種ボーダースコアの事前計算
-    sorted_df = df.sort_values('score', ascending=False).reset_index(drop=True)
-    plat_score = sorted_df.iloc[19999]['score'] if len(sorted_df) > 19999 else None
-    gold_score = sorted_df.iloc[119999]['score'] if len(sorted_df) > 119999 else None
-    silver_score = sorted_df.iloc[239999]['score'] if len(sorted_df) > 239999 else None
+    # 各ボーダー：ocr、boundaryで該当のrankに位置するもの
+    def get_border_score(rank_val):
+        if rank_val in df.index:
+            row = df.loc[rank_val]
+            st = row.get('status') if 'status' in df.columns else 'ocr'
+            st_str = str(st) if (not pd.isna(st) and st is not None) else 'ocr'
+            if st_str in ['ocr', 'boundary']:
+                return row['score']
+        return None
+
+    plat_score = get_border_score(20000)
+    gold_score = get_border_score(120000)
+    silver_score = get_border_score(240000)
     
     plat_score_str = f"{int(plat_score):,}" if (plat_score is not None and not pd.isna(plat_score)) else "データ不足"
     gold_score_str = f"{int(gold_score):,}" if (gold_score is not None and not pd.isna(gold_score)) else "データ不足"
@@ -820,9 +829,12 @@ else:
                                 )
                                 bin_settings[zone] = bin_val
 
+            # グラフ用データ: ocrのみ
+            graph_df = df[df['status'] == 'ocr'] if 'status' in df.columns else df
+
             # 描画
             fig = cached_total_assault_graph(
-                df=df,
+                df=graph_df,
                 event_id=event_id,
                 draw_mode=graph_draw_mode,
                 selected_zones_tuple=tuple(selected_zones),
@@ -869,9 +881,12 @@ else:
                         l_bin = st.number_input("グラフ１本当たりの幅", min_value=100, max_value=100000, value=10000, step=500, key="l_g_bin")
                     settings = {'range': l_range, 'compress': l_comp, 'bin': l_bin}
 
+            # グラフ用データ: ocrのみ
+            graph_df = df[df['status'] == 'ocr'] if 'status' in df.columns else df
+
             # 描画
             fig = cached_grand_assault_graph(
-                df=df,
+                df=graph_df,
                 view_mode=view_mode,
                 r_min=settings['range'][0],
                 r_max=settings['range'][1],
@@ -885,6 +900,9 @@ else:
     st.markdown("---")
 
     with st.expander("順位・スコア・タイム検索", expanded=False):
+        # 検索用データ: missing_interval 以外
+        search_df = df[df['status'] != 'missing_interval'] if 'status' in df.columns else df
+        sorted_search_df = search_df.sort_values('score', ascending=False).reset_index(drop=True)
         
         # 左右カラムに分割して縦幅を削減 (左: 検索基準ラジオボタン, 右: 各種入力欄)
         col_radio, col_input = st.columns([2, 3])
@@ -914,8 +932,8 @@ else:
                 search_rank = st.number_input(
                     "順位を指定してください（±50位の表が表示されます）",
                     min_value=1,
-                    max_value=len(df),
-                    value=20000 if len(df) >= 20000 else len(df),
+                    max_value=len(search_df),
+                    value=20000 if len(search_df) >= 20000 else len(search_df),
                     step=100,
                     key="search_rank_input"
                 )
@@ -928,7 +946,7 @@ else:
                     step=10000,
                     key="search_score_input"
                 )
-                actual_rank, actual_score = find_nearest_player(sorted_df, search_score)
+                actual_rank, actual_score = find_nearest_player(sorted_search_df, search_score)
                 target_idx = int(actual_rank) - 1
             else:  # タイム (総力戦専用)
                 meta = EVENT_META.get(normalize_event_id(event_id))
@@ -957,14 +975,14 @@ else:
                 total_search_sec = search_min * 60 + search_sec
                 base_score, k = params[search_diff]
                 estimated_score = base_score + (3600 - total_search_sec) * k
-                actual_rank, actual_score = find_nearest_player(sorted_df, estimated_score)
+                actual_rank, actual_score = find_nearest_player(sorted_search_df, estimated_score)
                 target_idx = int(actual_rank) - 1
             
         # ターゲット位置を中心に前後50位（計101名）をスライス
         start_idx = max(0, target_idx - 50)
-        end_idx = min(len(sorted_df), target_idx + 51)
+        end_idx = min(len(sorted_search_df), target_idx + 51)
         
-        display_df = sorted_df.iloc[start_idx:end_idx].copy()
+        display_df = sorted_search_df.iloc[start_idx:end_idx].copy()
         display_df['順位'] = display_df.index + 1
         
         if app_mode.startswith("総力戦"):
