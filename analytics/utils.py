@@ -99,9 +99,8 @@ def make_total_assault_summary(df, event_id):
             
     summary_data = []
     
-    # 総参加者数（boundary_total）が登録されているかチェック
-    total_entries = df[st_col == 'boundary_total']
-    total_limit = total_entries.index.max() if not total_entries.empty else df.index.max()
+    # 総参加者数は単純に df の最大インデックス（最後の順位）を使用
+    total_limit = df.index.max()
     
     for idx, diff in enumerate(diffs):
         this_first = first_ranks.get(diff, None)
@@ -191,7 +190,7 @@ def get_rank_scores(df, event_id):
             st = row.get('status') if 'status' in df.columns else 'ocr'
             st_str = str(st) if (not pd.isna(st) and st is not None) else 'ocr'
             
-            if st_str in ['ocr', 'boundary_top', 'boundary_border'] and not pd.isna(score):
+            if st_str in ['ocr', 'boundary_border'] and not pd.isna(score):
                 row_data = {
                     "順位": f"{rank:,} 位",
                     "スコア": f"{int(score):,}"

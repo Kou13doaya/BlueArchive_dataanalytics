@@ -618,10 +618,12 @@ def input_boundary_ranks_flow():
             final_status[int(r)] = 'ocr'
 
     # 手動入力した境界データをマッピング (ocr 優先のため、ocr がない場所のみ上書き)
+    # boundary_total は Parquet には保存しない
     for r, (sc, st) in temp_entries.items():
         if final_status.get(r) != 'ocr':
-            final_scores[r] = sc
-            final_status[r] = st
+            if st != 'boundary_total':
+                final_scores[r] = sc
+                final_status[r] = st
 
     # 間の区間を missing_interval で埋める
     df_new = pd.DataFrame(index=new_index)

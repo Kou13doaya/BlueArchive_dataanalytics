@@ -553,7 +553,7 @@ else:
     # ====================================================
     # 2. チナトロ・ゴルドロ・シルトロボーダー (上から2番目 - 横並びカード)
     # ====================================================
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         with st.container(border=True):
@@ -599,24 +599,15 @@ else:
                     diff, t_sec = score_to_clear_time(silver_score, event_id)
                     t_str = format_time_short(t_sec)
                     st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
-
-    with col4:
-        with st.container(border=True):
-            sub_img, sub_title = st.columns([1, 4])
-            with sub_img:
-                if os.path.exists("image/bronze.png"):
-                    st.image("image/bronze.png", width=35)
-            with sub_title:
-                st.markdown("**総参加者数**")
-                st.markdown(f"<small>(Normal最下位: {total_participants:,}位)</small>" if total_participants else "<small>(Normal最下位)</small>", unsafe_allow_html=True)
-                st.markdown(f"### {total_score_str}")
-                if app_mode.startswith("総力戦") and total_score is not None and not pd.isna(total_score):
-                    diff, t_sec = score_to_clear_time(total_score, event_id)
-                    t_str = format_time_short(t_sec)
-                    st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
         
     total_ocr_count = len(df[df['status'] == 'ocr']) if 'status' in df.columns else len(df)
-    st.markdown(f"<h3 style='text-align: center; font-weight: bold; margin-top: 10px;'>取得上位データ総数: {total_ocr_count:,} 人</h3>", unsafe_allow_html=True)
+    total_participants = df.index.max() if not df.empty else 0
+    st.markdown(
+        f"<h3 style='text-align: center; font-weight: bold; margin-top: 10px;'>"
+        f"取得上位データ総数: {total_ocr_count:,} 人 &nbsp;&nbsp;|&nbsp;&nbsp; 総参加者数: {total_participants:,} 人"
+        f"</h3>",
+        unsafe_allow_html=True
+    )
     st.markdown("---")
 
     # ====================================================
