@@ -63,6 +63,18 @@ st.markdown("""
 # スタイリング (ダーク/ブルー系のカスタムCSS)
 st.markdown("""
 <style>
+    /* アプリ最上部・コンテンツ全体の余白を極限まで削り、上部に引き上げる */
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
+    header[data-testid="stHeader"] {
+        height: 2.0rem !important;
+        background-color: transparent !important;
+    }
+    div[data-testid="stDecoration"] {
+        display: none !important;
+    }
     .main-title {
         font-size: 2.5rem;
         font-weight: 800;
