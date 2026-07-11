@@ -413,7 +413,7 @@ if not event_id:
         search_query = st.text_input(
             "ボス検索",
             value="",
-            placeholder="🔍 ボス名またはIDで検索 (例: ビナー, S90)",
+            placeholder="ボス名またはIDで検索 (例: ビナー, S90)",
             label_visibility="collapsed",
             key="portal_search_input"
         )
