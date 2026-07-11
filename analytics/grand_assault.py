@@ -97,7 +97,7 @@ def create_single_block_histogram(df_target, settings, block_name):
     return result_df, total_in_range
 
 
-def draw_grand_assault_graph(df, view_mode='High', settings=None, save_path=None, show=False):
+def draw_grand_assault_graph(df, event_id=None, suffix=None, view_mode='High', settings=None, save_path=None, show=False):
     """
     大決戦データを可視化したグラフを作成します。
     """
@@ -207,7 +207,30 @@ def draw_grand_assault_graph(df, view_mode='High', settings=None, save_path=None
                     bbox=dict(facecolor='#ffd700', alpha=0.8, edgecolor='none'))
 
     ax.set_ylim(0, num_bars)
-    ax.set_title(f'Grand Assault | {view_mode} Block View', fontsize=16, pad=15)
+    # EVENT_METAからタイトル文字列を作成
+    title_suffix = ""
+    if event_id:
+        from common.event_metadata import EVENT_META, normalize_event_id
+        import re
+        meta = EVENT_META.get(normalize_event_id(event_id))
+        if meta:
+            season = meta.get('season', '')
+            time_info = ""
+            if suffix == "last":
+                time_info = "Final Result"
+            elif suffix:
+                match_dt = re.match(r"^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})$", str(suffix))
+                if match_dt:
+                    time_info = f"{match_dt.group(1)}/{match_dt.group(2)}/{match_dt.group(3)} {match_dt.group(4)}:{match_dt.group(5)}"
+                else:
+                    time_info = str(suffix)
+            
+            if time_info:
+                title_suffix = f" - {season} ({time_info})"
+            else:
+                title_suffix = f" - {season}"
+
+    ax.set_title(f'Grand Assault{title_suffix} | {view_mode} Block View', fontsize=16, pad=15)
     ax.set_xlabel('Player Count', fontsize=12)
 
     # 合計人数表示

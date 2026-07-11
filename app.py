@@ -556,13 +556,12 @@ else:
                 if os.path.exists("image/platinum.png"):
                     st.image("image/platinum.png", width=35)
             with sub_title:
-                st.markdown("**チナトロボーダー**")
-                st.markdown("<small>(上位20,000人)</small>", unsafe_allow_html=True)
-                st.markdown(f"### {plat_score_str}")
+                html_content = f"<div style='margin-bottom: 0px;'><span style='color: #a855f7; font-size: 1.6rem; font-weight: bold; line-height: 1.1;'>{plat_score_str}</span></div>"
                 if app_mode.startswith("総力戦") and plat_score is not None and not pd.isna(plat_score):
                     diff, t_sec = score_to_clear_time(plat_score, event_id)
                     t_str = format_time_short(t_sec)
-                    st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
+                    html_content += f"<div style='margin-top: -2px; color: #888; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</div>"
+                st.markdown(html_content, unsafe_allow_html=True)
             
     with col2:
         with st.container(border=True):
@@ -571,13 +570,12 @@ else:
                 if os.path.exists("image/gold.png"):
                     st.image("image/gold.png", width=35)
             with sub_title:
-                st.markdown("**ゴルドロボーダー**")
-                st.markdown("<small>(上位120,000人)</small>", unsafe_allow_html=True)
-                st.markdown(f"### {gold_score_str}")
+                html_content = f"<div style='margin-bottom: 0px;'><span style='color: #D4AF37; font-size: 1.6rem; font-weight: bold; line-height: 1.1;'>{gold_score_str}</span></div>"
                 if app_mode.startswith("総力戦") and gold_score is not None and not pd.isna(gold_score):
                     diff, t_sec = score_to_clear_time(gold_score, event_id)
                     t_str = format_time_short(t_sec)
-                    st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
+                    html_content += f"<div style='margin-top: -2px; color: #888; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</div>"
+                st.markdown(html_content, unsafe_allow_html=True)
             
     with col3:
         with st.container(border=True):
@@ -586,13 +584,12 @@ else:
                 if os.path.exists("image/silver.png"):
                     st.image("image/silver.png", width=35)
             with sub_title:
-                st.markdown("**シルトロボーダー**")
-                st.markdown("<small>(上位240,000人)</small>", unsafe_allow_html=True)
-                st.markdown(f"### {silver_score_str}")
+                html_content = f"<div style='margin-bottom: 0px;'><span style='color: #A8A8A8; font-size: 1.6rem; font-weight: bold; line-height: 1.1;'>{silver_score_str}</span></div>"
                 if app_mode.startswith("総力戦") and silver_score is not None and not pd.isna(silver_score):
                     diff, t_sec = score_to_clear_time(silver_score, event_id)
                     t_str = format_time_short(t_sec)
-                    st.markdown(f"<span style='color: #666; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</span>", unsafe_allow_html=True)
+                    html_content += f"<div style='margin-top: -2px; color: #888; font-size: 0.95rem; font-weight: bold;'>{diff} {t_str}</div>"
+                st.markdown(html_content, unsafe_allow_html=True)
         
     total_ocr_count = len(df[df['status'] == 'ocr']) if 'status' in df.columns else len(df)
     
@@ -617,22 +614,197 @@ else:
         if total_participants > 0:
             show_participants = True
 
-    participants_str = ""
     if show_participants:
-        participants_str = f" &nbsp;&nbsp;|&nbsp;&nbsp; 総参加者数: {total_participants:,} 人"
-
-    st.markdown(
-        f"<h3 style='text-align: center; font-weight: bold; margin-top: 10px;'>"
-        f"取得上位データ総数: {total_ocr_count:,} 人{participants_str}"
-        f"</h3>",
-        unsafe_allow_html=True
-    )
+        st.markdown(
+            f"<h3 style='text-align: center; font-weight: bold; margin-top: 10px;'>"
+            f"総参加者数 {total_participants:,} 人"
+            f"</h3>",
+            unsafe_allow_html=True
+        )
     st.markdown("---")
 
     # ====================================================
-    # 3. 難易度・順位別クリア状況サマリー (上から3番目 - 折りたたみ)
+    # 3. クリア状況サマリー・プレイヤー検索 (上から3番目 - 折りたたみ)
     # ====================================================
-    with st.expander("難易度・順位別クリア状況サマリー", expanded=True):
+    with st.expander("クリア状況サマリー・プレイヤー検索", expanded=True):
+        # 検索用データ: status == 'ocr' のみ（空データを含めない）
+        search_df = df[df['status'] == 'ocr'] if 'status' in df.columns else df
+        sorted_search_df = search_df.sort_values('score', ascending=False).reset_index(drop=True)
+        
+        # 統合検索文字列の入力 (プレースホルダーに情報を集約)
+        search_query = st.text_input(
+            "順位・スコア・タイム検索",
+            value="",
+            placeholder="順位、スコア、またはタイムを入力してください (例: 20000, 31076000, 2:17.833, Torment 2:15.000)",
+            label_visibility="collapsed",
+            key="unified_search_input"
+        )
+        
+        target_records = []
+        
+        if search_query:
+            query = search_query.strip()
+            # 判別ロジック
+            difficulty_keywords = ["lunatic", "torment", "insane", "extreme", "hardcore", "veryhard", "hard", "normal",
+                                   "ルナティック", "トーメント", "インセイン", "エクストリーム", "ハードコア", "ベリーハード", "ハード", "ノーマル"]
+            
+            is_time = False
+            if ":" in query or "分" in query or "秒" in query or ("." in query and not query.replace(".", "").isdigit()):
+                is_time = True
+            for kw in difficulty_keywords:
+                if kw in query.lower():
+                    is_time = True
+                    break
+                    
+            if is_time:
+                if not app_mode.startswith("総力戦"):
+                    st.warning("⚠️ 大決戦ではクリアタイムでの検索は行えません。順位またはスコアを入力してください。")
+                else:
+                    detected_diff = None
+                    for kw in difficulty_keywords:
+                        if kw in query.lower():
+                            if kw in ["lunatic", "ルナティック"]: detected_diff = "Lunatic"
+                            elif kw in ["torment", "トーメント"]: detected_diff = "Torment"
+                            elif kw in ["insane", "インセイン"]: detected_diff = "Insane"
+                            elif kw in ["extreme", "エクストリーム"]: detected_diff = "Extreme"
+                            elif kw in ["hardcore", "ハードコア"]: detected_diff = "Hardcore"
+                            elif kw in ["veryhard", "ベリーハード"]: detected_diff = "VeryHard"
+                            elif kw in ["hard", "ハード"]: detected_diff = "Hard"
+                            elif kw in ["normal", "ノーマル"]: detected_diff = "Normal"
+                            break
+                    
+                    time_match = re.search(r"(\d+)[:分](\d+)(?:[:.秒](\d+))?", query)
+                    total_seconds = None
+                    if time_match:
+                        minutes = int(time_match.group(1))
+                        seconds = int(time_match.group(2))
+                        ms = int(time_match.group(3)) if time_match.group(3) else 0
+                        if ms > 0:
+                            ms_str = time_match.group(3)
+                            ms_val = float(f"0.{ms_str}")
+                            total_seconds = minutes * 60 + seconds + ms_val
+                        else:
+                            total_seconds = minutes * 60 + seconds
+                    else:
+                        sec_match = re.search(r"(\d+(?:\.\d+)?)", query)
+                        if sec_match:
+                            total_seconds = float(sec_match.group(1))
+                            
+                    if total_seconds is not None:
+                        meta = EVENT_META.get(normalize_event_id(event_id))
+                        boss_name = meta["boss"] if meta else "ビナー"
+                        limit_sec = 240
+                        if boss_name in ["KAITEN FX Mk.0", "ビナー"]:
+                            limit_sec = 180
+                        elif boss_name in ["イェソド", "ドラム缶ガニ"]:
+                            limit_sec = 270
+                        limit_type = limit_sec / 60.0
+                        
+                        if limit_type == 3.0:
+                            params = {"Lunatic": (43235000, 2880), "Torment": (31076000, 2400), "Insane": (19249600, 1920), "Extreme": (9392000, 1440), "Hardcore": (3832000, 960), "VeryHard": (1916000, 480), "Hard": (958000, 240), "Normal": (479000, 120)}
+                        elif limit_type == 4.0:
+                            params = {"Lunatic": (44025000, 2880), "Torment": (31708000, 2400), "Insane": (21016000, 1920), "Extreme": (10160000, 1440), "Hardcore": (4216000, 960), "VeryHard": (2108000, 480), "Hard": (1054000, 240), "Normal": (527000, 120)}
+                        else:
+                            params = {"Lunatic": (44664000, 2880), "Torment": (32502000, 2400), "Insane": (21741016, 1920), "Extreme": (10578880, 1440), "Hardcore": (4437600, 960), "VeryHard": (2218800, 480), "Hard": (1109400, 240), "Normal": (554700, 120)}
+                        
+                        target_diffs = [detected_diff] if detected_diff else ["Lunatic", "Torment", "Insane", "Extreme", "Hardcore", "VeryHard", "Hard", "Normal"]
+                        
+                        for diff_candidate in target_diffs:
+                            if diff_candidate in params:
+                                base_score, k = params[diff_candidate]
+                                est_score = base_score + (3600 - total_seconds) * k
+                                
+                                act_rank, act_score = find_nearest_player(sorted_search_df, est_score)
+                                act_idx = int(act_rank) - 1
+                                matched_row = sorted_search_df.iloc[act_idx]
+                                matched_score_val = matched_row['score']
+                                act_diff, act_t_sec = score_to_clear_time(matched_score_val, event_id)
+                                
+                                if not detected_diff:
+                                    if act_diff == diff_candidate:
+                                        target_records.append({
+                                            "順位": f"{int(act_rank):,} 位",
+                                            "クリア難易度": act_diff,
+                                            "スコア": f"{int(matched_score_val):,}",
+                                            "クリアタイム": format_time_short(act_t_sec),
+                                            "sort_key": act_idx
+                                        })
+                                else:
+                                    target_records.append({
+                                        "順位": f"{int(act_rank):,} 位",
+                                        "クリア難易度": act_diff,
+                                        "スコア": f"{int(matched_score_val):,}",
+                                        "クリアタイム": format_time_short(act_t_sec),
+                                        "sort_key": act_idx
+                                    })
+                        
+                        if not detected_diff and not target_records:
+                            for diff_candidate in params.keys():
+                                base_score, k = params[diff_candidate]
+                                est_score = base_score + (3600 - total_seconds) * k
+                                act_rank, act_score = find_nearest_player(sorted_search_df, est_score)
+                                act_idx = int(act_rank) - 1
+                                matched_row = sorted_search_df.iloc[act_idx]
+                                matched_score_val = matched_row['score']
+                                act_diff, act_t_sec = score_to_clear_time(matched_score_val, event_id)
+                                target_records.append({
+                                    "順位": f"{int(act_rank):,} 位",
+                                    "クリア難易度": act_diff,
+                                    "スコア": f"{int(matched_score_val):,}",
+                                    "クリアタイム": format_time_short(act_t_sec),
+                                    "sort_key": act_idx
+                                })
+            
+            if not target_records:
+                clean_query = query.replace(",", "").replace("位", "").replace("人", "").strip()
+                if clean_query.isdigit():
+                    val = int(clean_query)
+                    max_rank = len(sorted_search_df)
+                    if val <= max_rank:
+                        target_idx = min(max(1, val), max_rank) - 1
+                        matched_row = sorted_search_df.iloc[target_idx]
+                        matched_score_val = matched_row['score']
+                        rec = {
+                            "順位": f"{target_idx + 1:,} 位",
+                            "スコア": f"{int(matched_score_val):,}",
+                            "sort_key": target_idx
+                        }
+                        if app_mode.startswith("総力戦"):
+                            diff, t_sec = score_to_clear_time(matched_score_val, event_id)
+                            rec["クリア難易度"] = diff
+                            rec["クリアタイム"] = format_time_short(t_sec)
+                        target_records.append(rec)
+                    else:
+                        act_rank, act_score = find_nearest_player(sorted_search_df, val)
+                        act_idx = int(act_rank) - 1
+                        matched_row = sorted_search_df.iloc[act_idx]
+                        matched_score_val = matched_row['score']
+                        rec = {
+                            "順位": f"{act_idx + 1:,} 位",
+                            "スコア": f"{int(matched_score_val):,}",
+                            "sort_key": act_idx
+                        }
+                        if app_mode.startswith("総力戦"):
+                            diff, t_sec = score_to_clear_time(matched_score_val, event_id)
+                            rec["クリア難易度"] = diff
+                            rec["クリアタイム"] = format_time_short(t_sec)
+                        target_records.append(rec)
+                else:
+                    st.error("⚠️ 入力された形式を理解できませんでした。順位、スコア、またはタイムを入力してください。")
+            
+            if target_records:
+                display_df = pd.DataFrame(target_records)
+                cols_order = ["順位"]
+                if "クリア難易度" in display_df.columns:
+                    cols_order.append("クリア難易度")
+                cols_order.append("スコア")
+                if "クリアタイム" in display_df.columns:
+                    cols_order.append("クリアタイム")
+                    
+                display_df = display_df[cols_order]
+                st.dataframe(display_df, width="stretch", hide_index=True)
+        
+        st.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
         col_tab1, col_tab2 = st.columns(2)
         
         with col_tab1:
@@ -939,111 +1111,4 @@ else:
                 st.pyplot(fig)
                 plt.close(fig)
 
-    st.markdown("---")
 
-    with st.expander("順位・スコア・タイム検索", expanded=False):
-        # 検索用データ: missing_interval 以外
-        search_df = df[df['status'] != 'missing_interval'] if 'status' in df.columns else df
-        sorted_search_df = search_df.sort_values('score', ascending=False).reset_index(drop=True)
-        
-        # 左右カラムに分割して縦幅を削減 (左: 検索基準ラジオボタン, 右: 各種入力欄)
-        col_radio, col_input = st.columns([2, 3])
-        
-        target_idx = 0
-        
-        with col_radio:
-            if app_mode.startswith("総力戦"):
-                search_by = st.radio(
-                    "検索の基準を選択してください", 
-                    ["順位", "スコア", "タイム"], 
-                    index=0, 
-                    horizontal=True,
-                    key="search_by_select_ta"
-                )
-            else:
-                search_by = st.radio(
-                    "検索の基準を選択してください", 
-                    ["順位", "スコア"], 
-                    index=0, 
-                    horizontal=True,
-                    key="search_by_select_ga"
-                )
-            
-        with col_input:
-            if search_by == "順位":
-                search_rank = st.number_input(
-                    "順位を指定してください（±50位の表が表示されます）",
-                    min_value=1,
-                    max_value=len(search_df),
-                    value=20000 if len(search_df) >= 20000 else len(search_df),
-                    step=100,
-                    key="search_rank_input"
-                )
-                target_idx = int(search_rank) - 1
-            elif search_by == "スコア":
-                search_score = st.number_input(
-                    "スコアを指定してください",
-                    min_value=0,
-                    value=20000000,
-                    step=10000,
-                    key="search_score_input"
-                )
-                actual_rank, actual_score = find_nearest_player(sorted_search_df, search_score)
-                target_idx = int(actual_rank) - 1
-            else:  # タイム (総力戦専用)
-                meta = EVENT_META.get(normalize_event_id(event_id))
-                boss_name = meta["boss"] if meta else "ビナー"
-                limit_type = 4.0
-                if boss_name in ["KAITEN FX Mk.0", "ビナー"]:
-                    limit_type = 3.0
-                elif boss_name in ["イェソド", "ドラム缶ガニ"]:
-                    limit_type = 4.5
-                    
-                if limit_type == 3.0:
-                    params = {"Lunatic": (43235000, 2880), "Torment": (31076000, 2400), "Insane": (19249600, 1920), "Extreme": (9392000, 1440), "Hardcore": (3832000, 960), "VeryHard": (1916000, 480), "Hard": (958000, 240), "Normal": (479000, 120)}
-                elif limit_type == 4.0:
-                    params = {"Lunatic": (44025000, 2880), "Torment": (31708000, 2400), "Insane": (21016000, 1920), "Extreme": (10160000, 1440), "Hardcore": (4216000, 960), "VeryHard": (2108000, 480), "Hard": (1054000, 240), "Normal": (527000, 120)}
-                else:
-                    params = {"Lunatic": (44664000, 2880), "Torment": (32502000, 2400), "Insane": (21741016, 1920), "Extreme": (10578880, 1440), "Hardcore": (4437600, 960), "VeryHard": (2218800, 480), "Hard": (1109400, 240), "Normal": (554700, 120)}
- 
-                col_t_diff, col_t_m, col_t_s = st.columns([2, 1, 1])
-                with col_t_diff:
-                    search_diff = st.selectbox("クリア難易度を選択", options=list(params.keys()), index=2, key="search_diff_select")
-                with col_t_m:
-                    search_min = st.number_input("分", min_value=0, max_value=20, value=2, step=1, key="search_min_input")
-                with col_t_s:
-                    search_sec = st.number_input("秒 (小数可)", min_value=0.0, max_value=59.999, value=30.0, step=0.1, format="%.3f", key="search_sec_input")
-                
-                total_search_sec = search_min * 60 + search_sec
-                base_score, k = params[search_diff]
-                estimated_score = base_score + (3600 - total_search_sec) * k
-                actual_rank, actual_score = find_nearest_player(sorted_search_df, estimated_score)
-                target_idx = int(actual_rank) - 1
-            
-        # ターゲット位置を中心に前後50位（計101名）をスライス
-        start_idx = max(0, target_idx - 50)
-        end_idx = min(len(sorted_search_df), target_idx + 51)
-        
-        display_df = sorted_search_df.iloc[start_idx:end_idx].copy()
-        display_df['順位'] = display_df.index + 1
-        
-        if app_mode.startswith("総力戦"):
-            diffs, times = vectorize_score_to_clear_time(display_df['score'], event_id)
-            display_df['クリア難易度'] = diffs
-            display_df['クリアタイム'] = times
-            
-        if 'score' in display_df.columns:
-            display_df = display_df.rename(columns={'score': 'スコア'})
-            
-        cols = ['順位'] + [c for c in display_df.columns if c not in ['順位', 'status']]
-        display_df = display_df[cols]
-        
-        # Pandas Styler を用いてターゲット行を薄いゴールドでハイライト表示
-        def highlight_target(df_data):
-            styles = pd.DataFrame('', index=df_data.index, columns=df_data.columns)
-            if target_idx in df_data.index:
-                styles.loc[target_idx] = 'background-color: rgba(255, 215, 0, 0.25); font-weight: bold; border: 1px solid gold;'
-            return styles
-
-        styled_df = display_df.style.apply(highlight_target, axis=None)
-        st.dataframe(styled_df, width="stretch", hide_index=True)

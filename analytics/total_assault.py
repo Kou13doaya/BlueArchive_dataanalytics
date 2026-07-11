@@ -124,7 +124,7 @@ def create_dynamic_histogram(df, df_target, dynamic_settings):
     return result_df
 
 
-def draw_parametric_graph(df, event_id, draw_mode='スコア', selected_zones=['Lunatic', 'Torment'],
+def draw_parametric_graph(df, event_id, suffix=None, draw_mode='スコア', selected_zones=['Lunatic', 'Torment'],
                           compress_settings=None, bin_settings=None,
                           save_path=None, show=False,
                           **kwargs):
@@ -375,11 +375,31 @@ def draw_parametric_graph(df, event_id, draw_mode='スコア', selected_zones=['
 
     ax.set_ylim(0, num_bars)
 
+    title_suffix = ""
+    if event_id:
+        meta = EVENT_META.get(normalize_event_id(event_id))
+        if meta:
+            season = meta.get('season', '')
+            time_info = ""
+            if suffix == "last":
+                time_info = "Final Result"
+            elif suffix:
+                match_dt = re.match(r"^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})$", str(suffix))
+                if match_dt:
+                    time_info = f"{match_dt.group(1)}/{match_dt.group(2)}/{match_dt.group(3)} {match_dt.group(4)}:{match_dt.group(5)}"
+                else:
+                    time_info = str(suffix)
+            
+            if time_info:
+                title_suffix = f" - {season} ({time_info})"
+            else:
+                title_suffix = f" - {season}"
+
     if draw_mode == 'タイム':
-        ax.set_title(f'Total Assault (Clear Time) | Zones: {", ".join(selected_zones)}', fontsize=16, color=TEXT_COLOR, pad=15)
+        ax.set_title(f'Total Assault (Clear Time){title_suffix} | Zones: {", ".join(selected_zones)}', fontsize=16, color=TEXT_COLOR, pad=15)
         ax.set_ylabel('Clear Time (M:SS.ms) / Score Zones', fontsize=12, color=TEXT_COLOR)
     else:
-        ax.set_title(f'Total Assault (Score) | Zones: {", ".join(selected_zones)}', fontsize=16, color=TEXT_COLOR, pad=15)
+        ax.set_title(f'Total Assault (Score){title_suffix} | Zones: {", ".join(selected_zones)}', fontsize=16, color=TEXT_COLOR, pad=15)
         ax.set_ylabel('Score Zones', fontsize=12, color=TEXT_COLOR)
 
     ax.set_xlabel('Player Count', fontsize=12, color=TEXT_COLOR)

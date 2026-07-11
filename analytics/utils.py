@@ -198,7 +198,7 @@ def get_rank_scores(df, event_id):
                 if is_total_assault:
                     diff, t_sec = score_to_clear_time(score, event_id)
                     row_data["クリア難易度"] = diff
-                    row_data["クリアタイム"] = format_time(t_sec)
+                    row_data["クリアタイム"] = format_time_short(t_sec)
             else:
                 row_data = {
                     "順位": f"{rank:,} 位",
