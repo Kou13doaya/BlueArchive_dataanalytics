@@ -213,11 +213,13 @@ def make_grand_assault_summary(df, event_id=None):
     def get_bracket(score):
         if pd.isna(score):
             return 'Other'
-        for i in range(1, len(brackets)):
-            if score >= brackets[i]['min_score']:
-                return brackets[i - 1]['name']
-        if score >= 0:
-            return brackets[-1]['name']
+        for i in range(len(brackets)):
+            if i < len(brackets) - 1:
+                if score > brackets[i+1]['max_score']:
+                    return brackets[i]['name']
+            else:
+                if score >= 0:
+                    return brackets[i]['name']
         return 'Other'
 
     difficulty_map = {
@@ -239,24 +241,29 @@ def make_grand_assault_summary(df, event_id=None):
     counts = df['score'].apply(get_bracket).value_counts()
 
     summary_data = []
+    cumulative_count = 0
     for b in brackets:
         b_name = b['name']
         count = counts.get(b_name, 0)
         if count > 0:
+            cumulative_count += count
             summary_data.append({
                 "スコア帯ブロック": format_bracket_name(b_name),
-                "プレイヤー数": f"{count:,} 人"
+                "クリア人数 (単体)": f"{count:,} 人",
+                "クリア人数 (累積)": f"{cumulative_count:,} 人"
             })
 
     other_count = counts.get('Other', 0)
     if other_count > 0:
+        cumulative_count += other_count
         summary_data.append({
             "スコア帯ブロック": "Other",
-            "プレイヤー数": f"{other_count:,} 人"
+            "クリア人数 (単体)": f"{other_count:,} 人",
+            "クリア人数 (累積)": f"{cumulative_count:,} 人"
         })
 
     if not summary_data:
-        return pd.DataFrame([{"スコア帯ブロック": "データなし", "プレイヤー数": "0 人"}])
+        return pd.DataFrame([{"スコア帯ブロック": "データなし", "クリア人数 (単体)": "0 人", "クリア人数 (累積)": "0 人"}])
 
     return pd.DataFrame(summary_data)
 

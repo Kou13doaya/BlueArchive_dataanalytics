@@ -151,14 +151,15 @@ def cached_total_assault_graph(df, event_id, draw_mode, selected_zones_tuple, co
     )
 
 @st.cache_data(show_spinner=False)
-def cached_grand_assault_graph(df, event_id, suffix, view_mode, r_min, r_max, comp, bin_size):
-    settings = {'range': [r_min, r_max], 'compress': comp, 'bin': bin_size}
-    return grand_assault.draw_grand_assault_graph(
+def cached_grand_assault_graph(df, event_id, suffix, draw_mode, selected_zones_tuple, compress_tuple, bin_tuple):
+    return grand_assault.draw_grand_assault_parametric_graph(
         df=df,
         event_id=event_id,
         suffix=suffix,
-        view_mode=view_mode,
-        settings=settings,
+        draw_mode=draw_mode,
+        selected_zones=list(selected_zones_tuple),
+        compress_settings=dict(compress_tuple),
+        bin_settings=dict(bin_tuple),
         save_path=None,
         show=False
     )
@@ -869,37 +870,47 @@ else:
     # 4. スコア分布グラフ (上から4番目)
     # ====================================================
     with st.expander("スコア・タイム分布グラフ", expanded=True):
-        if app_mode.startswith("総力戦"):
-            # スコアとタイム両対応の表示モード選択を横並びで配置
-            col_g1, col_g2 = st.columns(2)
-            with col_g1:
-                graph_draw_mode = st.radio(
-                    "表示データ形式",
-                    ["スコア", "タイム"],
-                    index=0,
-                    horizontal=True,
-                    key="graph_draw_mode_select"
-                )
-            with col_g2:
-                selected_zones = st.multiselect(
-                    "表示する難易度帯 (複数選択可)",
-                    options=['Lunatic', 'Torment', 'Insane', 'Extreme', 'Hardcore', 'VeryHard', 'Hard', 'Normal'],
-                    default=['Lunatic', 'Torment']
-                )
+        # スコアとタイム両対応の表示モード選択を横並びで配置
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            graph_draw_mode = st.radio(
+                "表示データ形式",
+                ["スコア", "タイム"],
+                index=0,
+                horizontal=True,
+                key="graph_draw_mode_select"
+            )
+        
+        is_total_assault = app_mode.startswith("総力戦")
+        
+        if is_total_assault:
+            options_zones = ['Lunatic', 'Torment', 'Insane', 'Extreme', 'Hardcore', 'VeryHard', 'Hard', 'Normal']
+            default_zones = ['Lunatic', 'Torment']
+        else:
+            options_zones = ['TTT', 'TTI', 'TII', 'III', 'IIE', 'IEE', 'EEE', 'EEH', 'EHH', 'HHH', 'HHV', 'HVV', 'VVV', 'VVA', 'VAA', 'AAA', 'AAN', 'ANN', 'NNN']
+            default_zones = ['TTT', 'TTI', 'TII']
             
-            # ボス別のしきい値範囲の上限・下限を厳密に計算
-            meta = EVENT_META.get(normalize_event_id(event_id))
-            boss_name = meta["boss"] if meta else "ビナー"
+        with col_g2:
+            selected_zones = st.multiselect(
+                "表示する難易度帯 (複数選択可)",
+                options=options_zones,
+                default=default_zones
+            )
             
-            limit_sec = 240
-            if boss_name in ["KAITEN FX Mk.0", "ビナー"]:
-                limit_sec = 180
-            elif boss_name in ["イェソド", "ドラム缶ガニ"]:
-                limit_sec = 270
-                
-            limit_type = limit_sec / 60.0
+        # ボス別のしきい値範囲の上限・下限を厳密に計算
+        meta = EVENT_META.get(normalize_event_id(event_id))
+        boss_name = meta["boss"] if meta else "ビナー"
+        
+        limit_sec = 240
+        if boss_name in ["KAITEN FX Mk.0", "ビナー"]:
+            limit_sec = 180
+        elif boss_name in ["イェソド", "ドラム缶ガニ"]:
+            limit_sec = 270
             
-            # 各難易度のパラメータ (base_score, k)
+        limit_type = limit_sec / 60.0
+        
+        # 各難易度のパラメータ (base_score, k)
+        if is_total_assault:
             if limit_type == 3.0:
                 calc_params = {
                     "Lunatic": (43235000, 2880), "Torment": (31076000, 2400), "Insane": (19249600, 1920), 
@@ -910,180 +921,157 @@ else:
                     "Lunatic": (44025000, 2880), "Torment": (31708000, 2400), "Insane": (21016000, 1920), 
                     "Extreme": (10160000, 1440), "Hardcore": (4216000, 960), "VeryHard": (2108000, 480), "Hard": (1054000, 240), "Normal": (527000, 120)
                 }
-            else: # 4.5
+            else:
                 calc_params = {
                     "Lunatic": (44664000, 2880), "Torment": (32502000, 2400), "Insane": (21741016, 1920), 
                     "Extreme": (10578880, 1440), "Hardcore": (4437600, 960), "VeryHard": (2218800, 480), "Hard": (1109400, 240), "Normal": (554700, 120)
                 }
-                
-            # 各難易度ゾーンのスコア範囲をループで動的に算出
             ordered_zones = ["Lunatic", "Torment", "Insane", "Extreme", "Hardcore", "VeryHard", "Hard", "Normal"]
-            zone_ranges = {}
-            for idx, zone in enumerate(ordered_zones):
-                base_score, k = calc_params[zone]
-                z_min = base_score
-                if idx == 0:
-                    z_max = base_score + 3600 * k # 最上位難易度の理論上の最大値
-                else:
-                    # 1つ上の難易度の下限直下を上限とする
-                    z_max = calc_params[ordered_zones[idx-1]][0] - 1
-                zone_ranges[zone] = (z_min, z_max)
-
-            # ============================================
-            # 自動しきい値計算（パーセンタイルベース）
-            # ============================================
-            def auto_compress_threshold(df, score_min, score_max, percentile=3.0):
-                """
-                指定難易度帯のスコア群から、下位 percentile% の位置を自動計算し、
-                その値を圧縮しきい値の初期値として返す。
-                """
-                zone_scores = df[(df['score'] >= score_min) & (df['score'] < score_max)]['score']
-                if zone_scores.empty or len(zone_scores) < 10:
-                    # データが少なすぎる場合は下限値を返す
-                    return int(score_min)
-                threshold = int(np.percentile(zone_scores, percentile))
-                # 下限値を下回らないよう保護
-                return max(int(score_min), threshold)
-
-            # 難易度別のパーセンタイル初期設定
-            percentile_settings = {
-                "Lunatic": 5.0,
-                "Torment": 30.0,
-                "Insane": 30.0,
-                "Extreme": 30.0,
-                "Hardcore": 30.0,
-                "VeryHard": 30.0,
-                "Hard": 30.0,
-                "Normal": 30.0
+        else:
+            diff_params = {
+                3.0: {
+                    'L': (53603000, 2880), 'T': (39716000, 2400), 'I': (26161600, 1920),
+                    'E': (14576000, 1440), 'H': (7288000, 960), 'V': (3644000, 480),
+                    'A': (1822000, 240), 'N': (911000, 120)
+                },
+                4.5: {
+                    'L': (55032000, 2880), 'T': (41142000, 2400), 'I': (28653000, 1920),
+                    'E': (15760000, 1440), 'H': (7893600, 960), 'V': (3946800, 480),
+                    'A': (1973400, 240), 'N': (986700, 120)
+                },
+                4.0: {
+                    'L': (54393000, 2880), 'T': (40348000, 2400), 'I': (27928000, 1920),
+                    'E': (15344000, 1440), 'H': (7672000, 960), 'V': (3836000, 480),
+                    'A': (1918000, 240), 'N': (959000, 120)
+                }
             }
+            params = diff_params.get(limit_type, diff_params[4.0])
+            calc_params = {}
+            for i, combo in enumerate(options_zones):
+                max_score = sum(params[char][0] for char in combo)
+                mean_k = sum(params[char][1] for char in combo) / 3.0
+                if i < len(options_zones) - 1:
+                    next_combo = options_zones[i+1]
+                    border = sum(params[char][0] for char in next_combo)
+                else:
+                    border = 0
+                calc_params[combo] = (border, mean_k)
+            ordered_zones = options_zones
             
-            auto_defaults = {}
-            for zone in ordered_zones:
-                z_min, z_max = zone_ranges[zone]
-                pct = percentile_settings.get(zone, 30.0)
-                auto_defaults[zone] = auto_compress_threshold(df, z_min, z_max, percentile=pct)
+        # 各難易度ゾーンのスコア範囲をループで動的に算出
+        zone_ranges = {}
+        for idx, zone in enumerate(ordered_zones):
+            base_score, k = calc_params[zone]
+            z_min = base_score
+            if idx == 0:
+                if not is_total_assault:
+                    z_max = sum(params[char][0] for char in 'TTT')
+                else:
+                    z_max = base_score + 3600 * k # 最上位難易度の理論上の最大値
+            else:
+                # 1つ上の難易度の下限直下を上限とする
+                z_max = calc_params[ordered_zones[idx-1]][0] - 1
+            zone_ranges[zone] = (z_min, z_max)
 
-            with st.expander("難易度別詳細パラメータ設定", expanded=False):
-                if graph_draw_mode == "タイム":
-                    # 各難易度のパラメータを取得
+        # ============================================
+        # 自動しきい値計算（パーセンタイルベース）
+        # ============================================
+        def auto_compress_threshold(df, score_min, score_max, percentile=3.0):
+            zone_scores = df[(df['score'] >= score_min) & (df['score'] < score_max)]['score']
+            if zone_scores.empty or len(zone_scores) < 10:
+                return int(score_min)
+            threshold = int(np.percentile(zone_scores, percentile))
+            return max(int(score_min), threshold)
+
+        # 難易度別のパーセンタイル初期設定
+        percentile_settings = {z: 30.0 for z in ordered_zones}
+        if is_total_assault:
+            percentile_settings["Lunatic"] = 5.0
+            percentile_settings["Torment"] = 30.0
+            percentile_settings["Insane"] = 30.0
+        else:
+            percentile_settings["TTT"] = 30.0
+            percentile_settings["TTI"] = 30.0
+            percentile_settings["TII"] = 30.0
+            
+        auto_defaults = {}
+        for zone in ordered_zones:
+            z_min, z_max = zone_ranges[zone]
+            pct = percentile_settings.get(zone, 30.0)
+            auto_defaults[zone] = auto_compress_threshold(df, z_min, z_max, percentile=pct)
+
+        with st.expander("難易度別詳細パラメータ設定", expanded=False):
+            if graph_draw_mode == "タイム":
+                max_min = 60
+                max_sec = 0
+                limit_text = "60分00秒"
+                
+                default_time_bins = {z: 1.0 for z in ordered_zones}
+                if is_total_assault:
+                    default_time_bins["Lunatic"] = 60.0
+                    default_time_bins["Torment"] = 0.5
+                    default_time_bins["Insane"] = 0.5
+                    default_time_bins["Extreme"] = 10.0
+                    default_time_bins["Hardcore"] = 10.0
+                else:
+                    default_time_bins["TTT"] = 1.0
+                    default_time_bins["TTI"] = 1.0
+                    default_time_bins["TII"] = 1.0
+                
+                active_zones = [z for z in ordered_zones if z in selected_zones]
+                compress_settings = {}
+                bin_settings = {}
+                
+                for zone in ordered_zones:
+                    base_score, k = calc_params[zone]
+                    auto_def = auto_defaults[zone]
                     
-                    # 最大限界分と最大限界秒の算出 (0分〜60分に拡大)
-                    max_min = 60
-                    max_sec = 0
-                    limit_text = "60分00秒"
-                    
-                    default_time_bins = {
-                        "Lunatic": 60.0,
-                        "Torment": 0.5,
-                        "Insane": 0.5,
-                        "Extreme": 10.0,
-                        "Hardcore": 10.0,
-                        "VeryHard": 10.0,
-                        "Hard": 10.0,
-                        "Normal": 10.0
-                    }
-                    
-                    active_zones = [z for z in ordered_zones if z in selected_zones]
-                    
-                    compress_settings = {}
-                    bin_settings = {}
-                    
-                    # --- デフォルト値の初期計算 (選択状態にかかわらず裏側の変数定義として必須) ---
-                    for zone in ordered_zones:
-                        base_score, k = calc_params[zone]
-                        auto_def = auto_defaults[zone]
-                        
-                        # 自動しきい値からタイム逆算
+                    # 大決戦時のベーススコア算出
+                    if not is_total_assault:
+                        # comboのmax_scoreを取得
+                        max_score = sum(params[char][0] for char in zone)
+                        auto_time = max(0.0, (max_score - auto_def) / k)
+                    else:
                         auto_time = max(0.0, 3600 - (auto_def - base_score) / k)
                         auto_time = min(auto_time, 3600.0)
                         
-                        compress_settings[zone] = auto_def
-                        bin_settings[zone] = int(default_time_bins[zone] * k)
-                        
-                    if not active_zones:
-                        st.info("表示する難易度帯が選択されていません。")
-                    else:
-                        cols = st.columns(len(active_zones))
-                        for col_idx, zone in enumerate(active_zones):
-                            with cols[col_idx]:
-                                st.markdown(f"**{zone} 設定**")
-                                st.markdown("<small>下限タイム</small>", unsafe_allow_html=True)
-                                
-                                base_score, k = calc_params[zone]
-                                auto_def = auto_defaults[zone]
+                    compress_settings[zone] = auto_def
+                    bin_settings[zone] = int(default_time_bins[zone] * k)
+                    
+                if not active_zones:
+                    st.info("表示する難易度帯が選択されていません。")
+                else:
+                    cols = st.columns(len(active_zones))
+                    for col_idx, zone in enumerate(active_zones):
+                        with cols[col_idx]:
+                            st.markdown(f"**{zone} 設定**")
+                            st.markdown("<small>下限タイム</small>", unsafe_allow_html=True)
+                            
+                            base_score, k = calc_params[zone]
+                            auto_def = auto_defaults[zone]
+                            if not is_total_assault:
+                                max_score = sum(params[char][0] for char in zone)
+                                auto_time = max(0.0, (max_score - auto_def) / k)
+                            else:
                                 auto_time = max(0.0, 3600 - (auto_def - base_score) / k)
                                 auto_time = min(auto_time, 3600.0)
-                                
-                                def_min = int(auto_time // 60)
-                                def_sec = float(round(auto_time % 60, 3))
-                                
-                                col_m, col_s = st.columns(2)
-                                with col_m:
-                                    t_min_val = st.number_input("分", min_value=0, max_value=max_min, value=def_min, step=1, key=f"{zone}_t_m")
-                                with col_s:
-                                    max_s_val = 0.0 if t_min_val == max_min else 59.999
-                                    t_sec_val = st.number_input("秒", min_value=0.0, max_value=max_s_val, value=def_sec, step=0.1, format="%.3f", key=f"{zone}_t_s")
-                                
-                                total_sec = t_min_val * 60 + t_sec_val
-                                compress_settings[zone] = base_score + (3600 - total_sec) * k
-                                
-                                default_bin_sec = default_time_bins[zone]
-                                step_val = 0.1 if zone in ["Torment", "Insane"] else (1.0 if default_bin_sec >= 1.0 else 0.5)
-                                time_bin = st.number_input("グラフ１本当たりの幅 (秒)", min_value=0.1, max_value=120.0, value=default_bin_sec, step=step_val, key=f"{zone}_t_bin")
-                                bin_settings[zone] = int(time_bin * k)
-                                
-                else:
-                    default_score_bins = {
-                        "Lunatic": 150000,
-                        "Torment": 1500,
-                        "Insane": 1500,
-                        "Extreme": 30000,
-                        "Hardcore": 30000,
-                        "VeryHard": 30000,
-                        "Hard": 30000,
-                        "Normal": 30000
-                    }
-                    
-                    active_zones = [z for z in ordered_zones if z in selected_zones]
-                    
-                    compress_settings = {}
-                    bin_settings = {}
-                    
-                    # --- デフォルト値の初期計算 ---
-                    for zone in ordered_zones:
-                        compress_settings[zone] = auto_defaults[zone]
-                        bin_settings[zone] = default_score_bins[zone]
-                        
-                    if not active_zones:
-                        st.info("表示する難易度帯が選択されていません。")
-                    else:
-                        cols = st.columns(len(active_zones))
-                        for col_idx, zone in enumerate(active_zones):
-                            z_min, z_max = zone_ranges[zone]
-                            auto_def = auto_defaults[zone]
                             
-                            with cols[col_idx]:
-                                st.markdown(f"**{zone} 設定**")
-                                comp_val = st.number_input(
-                                    "下限スコア",
-                                    min_value=int(z_min),
-                                    max_value=int(z_max),
-                                    value=int(auto_def),
-                                    step=1000 if (z_max - z_min) < 100000 else 10000,
-                                    help=f"範囲: {int(z_min):,} ～ {int(z_max):,}",
-                                    key=f"{zone}_s_compress"
-                                )
-                                compress_settings[zone] = comp_val
-                                
-                                default_bin_val = default_score_bins[zone]
-                                bin_val = st.number_input(
-                                    "グラフ１本当たりの幅", 
-                                    min_value=10, 
-                                    max_value=1000000, 
-                                    value=default_bin_val, 
-                                    step=100 if default_bin_val < 5000 else 1000, 
-                                    key=f"{zone}_s_bin"
-                                )
+                            def_min = int(auto_time // 60)
+                            def_sec = float(round(auto_time % 60, 3))
+                            
+                            col_m, col_s = st.columns(2)
+                            with col_m:
+                                t_min_val = st.number_input("分", min_value=0, max_value=max_min, value=def_min, step=1, key=f"{zone}_t_m")
+                            with col_s:
+                                max_s_val = 0.0 if t_min_val == max_min else 59.999
+                                t_sec_val = st.number_input("秒", min_value=0.0, max_value=max_s_val, value=def_sec, step=0.1, format="%.3f", key=f"{zone}_t_s")
+                            
+                            total_sec = t_min_val * 60 + t_sec_val
+                            if not is_total_assault:
+                                max_score = sum(params[char][0] for char in zone)
+                                compress_settings[zone] = max_score - total_sec * k
+                            else:
+                                compress_settings[zone] = base_score + (3600 - total_sec) * k
                                 bin_settings[zone] = bin_val
 
             # グラフ用データ: ocrのみ
@@ -1102,62 +1090,6 @@ else:
                 st.pyplot(fig)
                 plt.close(fig)
                 
-        else:
-            # 大決戦パラメータ取得
-            view_mode = st.selectbox(
-                "表示スコア帯ブロック",
-                ['High', 'Mid', 'Low'],
-                index=0
-            )
-            
-            with st.expander("ブロック詳細パラメータ設定", expanded=False):
-                if view_mode == 'High':
-                    h_col1, h_col2 = st.columns(2)
-                    with h_col1:
-                        # 表示範囲の上限・下限をそれぞれ number_input で設定
-                        h_range_min = st.number_input("表示範囲 (下限)", min_value=73740000, max_value=121044000, value=98860000, step=10000, key="h_g_range_min")
-                        h_range_max = st.number_input("表示範囲 (上限)", min_value=73740000, max_value=121044000, value=121044000, step=10000, key="h_g_range_max")
-                        h_comp = st.number_input("下限スコア", min_value=73740000, max_value=121044000, value=107000000, step=10000, key="h_g_comp")
-                    with h_col2:
-                        h_bin = st.number_input("グラフ１本当たりの幅", min_value=100, max_value=100000, value=10000, step=500, key="h_g_bin")
-                    settings = {'range': [h_range_min, h_range_max], 'compress': h_comp, 'bin': h_bin}
-                    
-                elif view_mode == 'Mid':
-                    m_col1, m_col2 = st.columns(2)
-                    with m_col1:
-                        m_range_min = st.number_input("表示範囲 (下限)", min_value=41336000, max_value=83784000, value=46500000, step=10000, key="m_g_range_min")
-                        m_range_max = st.number_input("表示範囲 (上限)", min_value=41336000, max_value=83784000, value=83784000, step=10000, key="m_g_range_max")
-                        m_comp = st.number_input("下限スコア", min_value=41336000, max_value=83784000, value=69932800, step=10000, key="m_g_comp")
-                    with m_col2:
-                        m_bin = st.number_input("グラフ１本当たりの幅", min_value=100, max_value=100000, value=10000, step=500, key="m_g_bin")
-                    settings = {'range': [m_range_min, m_range_max], 'compress': m_comp, 'bin': m_bin}
-                    
-                else: # Low
-                    l_col1, l_col2 = st.columns(2)
-                    with l_col1:
-                        l_range_min = st.number_input("表示範囲 (下限)", min_value=0, max_value=46032000, value=43440000, step=10000, key="l_g_range_min")
-                        l_range_max = st.number_input("表示範囲 (上限)", min_value=0, max_value=46032000, value=46032000, step=10000, key="l_g_range_max")
-                        l_comp = st.number_input("下限スコア", min_value=0, max_value=46032000, value=44995200, step=10000, key="l_g_comp")
-                    with l_col2:
-                        l_bin = st.number_input("グラフ１本当たりの幅", min_value=100, max_value=100000, value=10000, step=500, key="l_g_bin")
-                    settings = {'range': [l_range_min, l_range_max], 'compress': l_comp, 'bin': l_bin}
 
-            # グラフ用データ: ocrのみ
-            graph_df = df[df['status'] == 'ocr'] if 'status' in df.columns else df
-
-            # 描画
-            fig = cached_grand_assault_graph(
-                df=graph_df,
-                event_id=event_id,
-                suffix=selected_suffix,
-                view_mode=view_mode,
-                r_min=settings['range'][0],
-                r_max=settings['range'][1],
-                comp=settings['compress'],
-                bin_size=settings['bin']
-            )
-            if fig:
-                st.pyplot(fig)
-                plt.close(fig)
 
 

@@ -2,14 +2,90 @@
 import numpy as np
 from common.event_metadata import EVENT_META, normalize_event_id
 
+def grand_assault_score_to_clear_time(score, event_id):
+    """
+    大決戦スコアから、難易度組み合わせおよび合計クリアタイム（戦闘時間）を逆算します。
+    """
+    event_id = normalize_event_id(event_id)
+    meta = EVENT_META.get(event_id)
+    boss_name = meta["boss"] if meta else "ビナー"
+    
+    limit_sec = 240
+    if boss_name in ["KAITEN FX Mk.0", "ビナー"]:
+        limit_sec = 180
+    elif boss_name in ["イェソド", "ドラム缶ガニ"]:
+        limit_sec = 270
+    limit_type = limit_sec / 60.0
+
+    # 制限時間ごとの難易度理論値とk値 (a, b)
+    diff_params = {
+        3.0: {
+            'L': (53603000, 2880), 'T': (39716000, 2400), 'I': (26161600, 1920),
+            'E': (14576000, 1440), 'H': (7288000, 960), 'V': (3644000, 480),
+            'A': (1822000, 240), 'N': (911000, 120)
+        },
+        4.5: {
+            'L': (55032000, 2880), 'T': (41142000, 2400), 'I': (28653000, 1920),
+            'E': (15760000, 1440), 'H': (7893600, 960), 'V': (3946800, 480),
+            'A': (1973400, 240), 'N': (986700, 120)
+        },
+        4.0: {
+            'L': (54393000, 2880), 'T': (40348000, 2400), 'I': (27928000, 1920),
+            'E': (15344000, 1440), 'H': (7672000, 960), 'V': (3836000, 480),
+            'A': (1918000, 240), 'N': (959000, 120)
+        }
+    }
+    params = diff_params.get(limit_type, diff_params[4.0])
+
+    combinations = ['TTT', 'TTI', 'TII', 'III', 'IIE', 'IEE', 'EEE', 'EEH', 'EHH', 'HHH', 'HHV', 'HVV', 'VVV', 'VVA', 'VAA', 'AAA', 'AAN', 'ANN', 'NNN']
+    brackets = []
+    for combo in combinations:
+        max_score = sum(params[char][0] for char in combo)
+        mean_k = sum(params[char][1] for char in combo) / 3.0
+        brackets.append({
+            'name': combo,
+            'max_score': max_score,
+            'mean_k': mean_k
+        })
+    brackets.sort(key=lambda x: x['max_score'], reverse=True)
+
+    selected_bracket = 'Other'
+    selected_bracket_info = None
+    for i in range(len(brackets)):
+        if i < len(brackets) - 1:
+            if score > brackets[i+1]['max_score']:
+                selected_bracket = brackets[i]['name']
+                selected_bracket_info = brackets[i]
+                break
+        else:
+            if score >= 0:
+                selected_bracket = brackets[i]['name']
+                selected_bracket_info = brackets[i]
+                break
+
+    if selected_bracket == 'Other' or not selected_bracket_info:
+        return "Unknown", None
+
+    max_score = selected_bracket_info['max_score']
+    mean_k = selected_bracket_info['mean_k']
+    
+    t_seconds = (max_score - score) / mean_k
+    if t_seconds < 0:
+        t_seconds = 0.0
+
+    return selected_bracket, t_seconds
+
 def score_to_clear_time(score, event_id):
     """
-    総力戦スコアから、難易度およびクリアタイム（戦闘時間）を逆算します。
+    スコアから難易度およびクリアタイム（戦闘時間）を逆算します（総力戦/大決戦対応）。
     """
     if not event_id:
         return "Unknown", None
     
     event_id = normalize_event_id(event_id)
+    if event_id.startswith("grand_assault_"):
+        return grand_assault_score_to_clear_time(score, event_id)
+        
     if not event_id.startswith("total_assault_"):
         return "Unknown", None
         
@@ -110,6 +186,25 @@ def vectorize_score_to_clear_time(scores, event_id):
         return [], []
         
     event_id = normalize_event_id(event_id)
+    if event_id.startswith("grand_assault_"):
+        diff_list = ["Unknown"] * len(scores)
+        time_list = ["N/A"] * len(scores)
+        for i, val in enumerate(scores.to_numpy()):
+            diff, t_sec = grand_assault_score_to_clear_time(val, event_id)
+            if diff != "Unknown" and t_sec is not None:
+                diff_list[i] = diff
+                minutes = int(t_sec // 60)
+                seconds = int(t_sec % 60)
+                ms = int(round((t_sec % 1) * 1000))
+                if ms >= 1000:
+                    seconds += 1
+                    ms -= 1000
+                if seconds >= 60:
+                    minutes += 1
+                    seconds -= 60
+                time_list[i] = f"{minutes}:{seconds:02d}.{ms:03d}"
+        return diff_list, time_list
+
     meta = EVENT_META.get(event_id)
     boss_name = meta["boss"] if meta else ""
     limit_type = 4.0
