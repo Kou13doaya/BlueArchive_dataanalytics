@@ -625,22 +625,20 @@ else:
     total_ocr_count = len(df[df['status'] == 'ocr']) if 'status' in df.columns else len(df)
     
     # 総参加者数の取得 (boundary_total)
-    show_participants = False
     total_participants = None
     if 'status' in df.columns:
         # boundary_total のみから取得
         total_rows = df[df['status'] == 'boundary_total']
         if not total_rows.empty:
             total_participants = total_rows.index.max()
-            show_participants = True
 
-    if show_participants:
-        st.markdown(
-            f"<h3 style='text-align: center; font-weight: bold; margin-top: 10px;'>"
-            f"総参加者数 {total_participants:,} 人"
-            f"</h3>",
-            unsafe_allow_html=True
-        )
+    participants_str = f"{total_participants:,} 人" if total_participants is not None else "データ不足"
+    st.markdown(
+        f"<h3 style='text-align: center; font-weight: bold; margin-top: 10px;'>"
+        f"総参加者数 {participants_str}"
+        f"</h3>",
+        unsafe_allow_html=True
+    )
     st.markdown("---")
 
     # ====================================================
