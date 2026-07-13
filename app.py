@@ -1013,11 +1013,33 @@ else:
         auto_defaults = {}
         if not is_total_assault:
             sorted_df = df.sort_values('score', ascending=False)
+            
+            # 20,000位のスコアと属するブラケットを特定
+            rank_20k_idx = min(19999, len(sorted_df) - 1)
+            score_20k = int(sorted_df.iloc[rank_20k_idx]['score']) if rank_20k_idx >= 0 else 0
+            from common.score_converter import grand_assault_score_to_clear_time
+            bracket_20k, _ = grand_assault_score_to_clear_time(score_20k, event_id)
+            
+            # 21,000位のスコア
             rank_21k_idx = min(20999, len(sorted_df) - 1)
             score_21k = int(sorted_df.iloc[rank_21k_idx]['score']) if rank_21k_idx >= 0 else 0
+            
             for zone in ordered_zones:
                 z_min, z_max = zone_ranges[zone]
-                auto_defaults[zone] = max(z_min, score_21k)
+                if zone == bracket_20k:
+                    # 条件①: 20,000位が該当する難易度帯
+                    if score_21k >= z_min:
+                        val = score_21k
+                    else:
+                        val = z_min
+                else:
+                    # 条件②: 該当以外は変更前のパーセンタイル計算（下位30%）
+                    pct = percentile_settings.get(zone, 30.0)
+                    val = auto_compress_threshold(df, z_min, z_max, percentile=pct)
+                
+                # 条件③: 下4桁切り捨て
+                val = (val // 10000) * 10000
+                auto_defaults[zone] = max(int(z_min), val)
         else:
             for zone in ordered_zones:
                 z_min, z_max = zone_ranges[zone]
