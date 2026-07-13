@@ -501,7 +501,8 @@ def draw_grand_assault_parametric_graph(df, event_id, suffix=None, draw_mode='�
             else:
                 title_suffix = f" - {season}"
 
-    ax.set_title(f'Grand Assault{title_suffix} | Parametric View ({draw_mode} Mode)', fontsize=16, pad=15)
+    mode_eng = 'Score' if draw_mode == 'スコア' else 'Time'
+    ax.set_title(f'Grand Assault{title_suffix} | Parametric View ({mode_eng} Mode)', fontsize=16, pad=15)
     ax.set_xlabel('Player Count', fontsize=12)
 
     total_count = len(df_display)
