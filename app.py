@@ -855,7 +855,7 @@ else:
             if app_mode.startswith("総力戦"):
                 summary_df = make_total_assault_summary(df, event_id)
             else:
-                summary_df = make_grand_assault_summary(df)
+                summary_df = make_grand_assault_summary(df, event_id)
             st.dataframe(summary_df, width="stretch", hide_index=True)
             
         with col_tab2:

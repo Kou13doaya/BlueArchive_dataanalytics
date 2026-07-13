@@ -130,22 +130,136 @@ def make_total_assault_summary(df, event_id):
         })
     return pd.DataFrame(summary_data)
 
-def make_grand_assault_summary(df):
+def make_grand_assault_summary(df, event_id=None):
     """
-    大決戦用の数値簡易表データフレームを作成します (順位基準)。
+    大決戦用の数値簡易表データフレームを作成します (難易度組み合わせ基準)。
     """
-    max_rank = df.index.max() if (df is not None and not df.empty) else 0
-    
-    high_count = min(20000, max_rank)
-    mid_count = max(0, min(120000, max_rank) - high_count)
-    low_count = max(0, max_rank - 120000)
-    
-    summary_data = [
-        {"スコア帯ブロック": "High (TTT ~ TII)", "プレイヤー数": f"{high_count:,} 人"},
-        {"スコア帯ブロック": "Mid (III ~ IEE)", "プレイヤー数": f"{mid_count:,} 人"},
-        {"スコア帯ブロック": "Low (EEE ~)", "プレイヤー数": f"{low_count:,} 人"}
-    ]
+    if df is None or df.empty:
+        return pd.DataFrame([{"スコア帯ブロック": "データなし", "プレイヤー数": "0 人"}])
+
+    # ボス名から制限時間を割り出す
+    boss_name = "ビナー"
+    if event_id:
+        event_id = normalize_event_id(event_id)
+        meta = EVENT_META.get(event_id)
+        if meta:
+            boss_name = meta.get("boss", "ビナー")
+
+    limit_sec = 240
+    if boss_name in ["KAITEN FX Mk.0", "ビナー"]:
+        limit_sec = 180
+    elif boss_name in ["イェソド", "ドラム缶ガニ"]:
+        limit_sec = 270
+
+    limit_type = limit_sec / 60.0
+
+    # 制限時間ごとの難易度理論値
+    theoretical_scores_3m = {
+        'L': 53603000,
+        'T': 39716000,
+        'I': 26161600,
+        'E': 14576000,
+        'H': 7288000,
+        'V': 3644000,
+        'A': 1822000,
+        'N': 911000
+    }
+    theoretical_scores_4m = {
+        'L': 54393000,
+        'T': 40348000,
+        'I': 27928000,
+        'E': 15344000,
+        'H': 7672000,
+        'V': 3836000,
+        'A': 1918000,
+        'N': 959000
+    }
+    theoretical_scores_4m30s = {
+        'L': 55032000,
+        'T': 41142000,
+        'I': 28653000,
+        'E': 15760000,
+        'H': 7893600,
+        'V': 3946800,
+        'A': 1973400,
+        'N': 986700
+    }
+
+    if limit_type == 3.0:
+        theoretical = theoretical_scores_3m
+    elif limit_type == 4.5:
+        theoretical = theoretical_scores_4m30s
+    else:
+        theoretical = theoretical_scores_4m
+
+    combinations = ['TTT', 'TTI', 'TII', 'III', 'IIE', 'IEE', 'EEE', 'EEH', 'EHH', 'HHH', 'HHV', 'HVV', 'VVV', 'VVA', 'VAA', 'AAA', 'AAN', 'ANN', 'NNN']
+
+    # 各ブラケットの理論値合計（max_score）を算出
+    brackets = []
+    for combo in combinations:
+        max_score = sum(theoretical.get(char, 0) for char in combo)
+        brackets.append({
+            'name': combo,
+            'max_score': max_score
+        })
+    brackets.sort(key=lambda x: x['max_score'], reverse=True)
+
+    # 各ブラケットの min_score（下限値）を設定
+    # インデックス i の下限値は、一つ下のブラケット i+1 の最大値
+    for i in range(len(brackets) - 1):
+        brackets[i]['min_score'] = brackets[i+1]['max_score']
+    brackets[-1]['min_score'] = 0
+
+    def get_bracket(score):
+        if pd.isna(score):
+            return 'Other'
+        for i in range(1, len(brackets)):
+            if score >= brackets[i]['min_score']:
+                return brackets[i - 1]['name']
+        if score >= 0:
+            return brackets[-1]['name']
+        return 'Other'
+
+    difficulty_map = {
+        'L': 'Lunatic',
+        'T': 'Torment',
+        'I': 'Insane',
+        'E': 'Extreme',
+        'H': 'Hardcore',
+        'V': 'VeryHard',
+        'A': 'Hard',
+        'N': 'Normal'
+    }
+
+    def format_bracket_name(name):
+        if name == 'Other':
+            return 'Other'
+        return '・'.join(difficulty_map.get(char, char) for char in name)
+
+    counts = df['score'].apply(get_bracket).value_counts()
+
+    summary_data = []
+    for b in brackets:
+        b_name = b['name']
+        count = counts.get(b_name, 0)
+        if count > 0:
+            summary_data.append({
+                "スコア帯ブロック": format_bracket_name(b_name),
+                "プレイヤー数": f"{count:,} 人"
+            })
+
+    other_count = counts.get('Other', 0)
+    if other_count > 0:
+        summary_data.append({
+            "スコア帯ブロック": "Other",
+            "プレイヤー数": f"{other_count:,} 人"
+        })
+
+    if not summary_data:
+        return pd.DataFrame([{"スコア帯ブロック": "データなし", "プレイヤー数": "0 人"}])
+
     return pd.DataFrame(summary_data)
+
 
 def translate_diff(diff_name):
     return diff_translation.get(diff_name, diff_name)
