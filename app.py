@@ -815,7 +815,10 @@ else:
                             rec["クリアタイム"] = format_time_short(t_sec)
                         target_records.append(rec)
                 else:
-                    st.error("⚠️ 入力された形式を理解できませんでした。順位、スコア、またはタイムを入力してください。")
+                    if app_mode.startswith("総力戦"):
+                        st.error("⚠️ 入力された形式を理解できませんでした。順位、スコア、またはタイムを入力してください。")
+                    else:
+                        st.error("⚠️ 入力された形式を理解できませんでした。順位、またはスコアを入力してください。")
             
             if target_records:
                 display_df = pd.DataFrame(target_records)
