@@ -650,10 +650,17 @@ else:
         sorted_search_df = search_df.sort_values('score', ascending=False).reset_index(drop=True)
         
         # 統合検索文字列の入力 (プレースホルダーに情報を集約)
+        if app_mode.startswith("総力戦"):
+            search_label = "順位・スコア・タイム検索"
+            search_placeholder = "順位、スコア、またはタイムを入力してください (例: 20000, 31076000, 2:17.833, Torment 2:15.000)"
+        else:
+            search_label = "順位・スコア検索"
+            search_placeholder = "順位、またはスコアを入力してください (例: 20000, 104800000)"
+
         search_query = st.text_input(
-            "順位・スコア・タイム検索",
+            search_label,
             value="",
-            placeholder="順位、スコア、またはタイムを入力してください (例: 20000, 31076000, 2:17.833, Torment 2:15.000)",
+            placeholder=search_placeholder,
             label_visibility="collapsed",
             key="unified_search_input"
         )
