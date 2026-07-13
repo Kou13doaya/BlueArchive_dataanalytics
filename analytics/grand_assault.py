@@ -505,12 +505,6 @@ def draw_grand_assault_parametric_graph(df, event_id, suffix=None, draw_mode='ã‚
     ax.set_title(f'Grand Assault{title_suffix} | Parametric View ({mode_eng} Mode)', fontsize=16, pad=15)
     ax.set_xlabel('Player Count', fontsize=12)
 
-    total_count = len(df_display)
-    info_text = f"Total Players: {total_count:,}"
-    ax.text(0.98, 0.02, info_text, transform=ax.transAxes,
-            fontsize=12, fontweight='bold', va='bottom', ha='right',
-            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.9, edgecolor='gray'))
-
     plt.tight_layout()
 
     if save_path:
