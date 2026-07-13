@@ -885,14 +885,26 @@ else:
                 )
             else:
                 graph_draw_mode = "スコア"
-                st.markdown("<div style='padding-top: 10px;'><strong>表示データ形式:</strong> スコア固定</div>", unsafe_allow_html=True)
         
         if is_total_assault:
             options_zones = ['Lunatic', 'Torment', 'Insane', 'Extreme', 'Hardcore', 'VeryHard', 'Hard', 'Normal']
             default_zones = ['Lunatic', 'Torment']
         else:
             options_zones = ['TTT', 'TTI', 'TII', 'III', 'IIE', 'IEE', 'EEE', 'EEH', 'EHH', 'HHH', 'HHV', 'HVV', 'VVV', 'VVA', 'VAA', 'AAA', 'AAN', 'ANN', 'NNN']
-            default_zones = ['TTT', 'TTI', 'TII']
+            
+            # 動的に上位20,000位以内のスコア帯ブロックを計算
+            from common.score_converter import grand_assault_score_to_clear_time
+            sorted_df = df.sort_values('score', ascending=False)
+            top_20k_df = sorted_df.iloc[:20000]
+            top_brackets = set()
+            for score in top_20k_df['score'].dropna():
+                bracket, _ = grand_assault_score_to_clear_time(score, event_id)
+                if bracket and bracket != 'Unknown':
+                    top_brackets.add(bracket)
+            
+            default_zones = [z for z in options_zones if z in top_brackets]
+            if not default_zones:
+                default_zones = ['TTI']
             
         with col_g2:
             selected_zones = st.multiselect(
@@ -999,10 +1011,18 @@ else:
             percentile_settings["TII"] = 30.0
             
         auto_defaults = {}
-        for zone in ordered_zones:
-            z_min, z_max = zone_ranges[zone]
-            pct = percentile_settings.get(zone, 30.0)
-            auto_defaults[zone] = auto_compress_threshold(df, z_min, z_max, percentile=pct)
+        if not is_total_assault:
+            sorted_df = df.sort_values('score', ascending=False)
+            rank_21k_idx = min(20999, len(sorted_df) - 1)
+            score_21k = int(sorted_df.iloc[rank_21k_idx]['score']) if rank_21k_idx >= 0 else 0
+            for zone in ordered_zones:
+                z_min, z_max = zone_ranges[zone]
+                auto_defaults[zone] = max(z_min, score_21k)
+        else:
+            for zone in ordered_zones:
+                z_min, z_max = zone_ranges[zone]
+                pct = percentile_settings.get(zone, 30.0)
+                auto_defaults[zone] = auto_compress_threshold(df, z_min, z_max, percentile=pct)
 
         with st.expander("難易度別詳細パラメータ設定", expanded=False):
             if graph_draw_mode == "タイム" and is_total_assault:
