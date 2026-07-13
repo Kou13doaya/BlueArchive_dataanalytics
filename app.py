@@ -872,6 +872,16 @@ else:
     with st.expander("スコア・タイム分布グラフ", expanded=True):
         is_total_assault = app_mode.startswith("総力戦")
         
+        def format_bracket(zone):
+            abbrev_map = {'T': 'Tor', 'I': 'Ins', 'E': 'Ext', 'H': 'Hco', 'V': 'Vha', 'A': 'Hrd', 'N': 'Nor', 'L': 'Lun'}
+            if zone in ['Lunatic', 'Torment', 'Insane', 'Extreme', 'Hardcore', 'VeryHard', 'Hard', 'Normal']:
+                return zone
+            if zone == 'Other':
+                return 'Other'
+            if all(c in abbrev_map for c in zone):
+                return '・'.join(abbrev_map[c] for c in zone)
+            return zone
+            
         if is_total_assault:
             col_g1, col_g2 = st.columns(2)
             with col_g1:
@@ -888,7 +898,8 @@ else:
                 selected_zones = st.multiselect(
                     "表示する難易度帯 (複数選択可)",
                     options=options_zones,
-                    default=default_zones
+                    default=default_zones,
+                    format_func=format_bracket
                 )
         else:
             graph_draw_mode = "スコア"
@@ -911,7 +922,8 @@ else:
             selected_zones = st.multiselect(
                 "表示する難易度帯 (複数選択可)",
                 options=options_zones,
-                default=default_zones
+                default=default_zones,
+                format_func=format_bracket
             )
             
         # ボス別のしきい値範囲の上限・下限を厳密に計算
@@ -1072,7 +1084,7 @@ else:
                     cols = st.columns(len(active_zones))
                     for col_idx, zone in enumerate(active_zones):
                         with cols[col_idx]:
-                            st.markdown(f"**{zone} 設定**")
+                            st.markdown(f"**{format_bracket(zone)} 設定**")
                             st.markdown("<small>下限タイム</small>", unsafe_allow_html=True)
                             
                             base_score, k = calc_params[zone]
@@ -1125,7 +1137,7 @@ else:
                         auto_def = auto_defaults[zone]
                         
                         with cols[col_idx]:
-                            st.markdown(f"**{zone} 設定**")
+                            st.markdown(f"**{format_bracket(zone)} 設定**")
                             comp_val = st.number_input(
                                 "下限スコア",
                                 min_value=int(z_min),
