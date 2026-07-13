@@ -872,10 +872,9 @@ else:
     with st.expander("スコア・タイム分布グラフ", expanded=True):
         is_total_assault = app_mode.startswith("総力戦")
         
-        # スコアとタイム両対応の表示モード選択を横並びで配置
-        col_g1, col_g2 = st.columns(2)
-        with col_g1:
-            if is_total_assault:
+        if is_total_assault:
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
                 graph_draw_mode = st.radio(
                     "表示データ形式",
                     ["スコア", "タイム"],
@@ -883,13 +882,16 @@ else:
                     horizontal=True,
                     key="graph_draw_mode_select"
                 )
-            else:
-                graph_draw_mode = "スコア"
-        
-        if is_total_assault:
             options_zones = ['Lunatic', 'Torment', 'Insane', 'Extreme', 'Hardcore', 'VeryHard', 'Hard', 'Normal']
             default_zones = ['Lunatic', 'Torment']
+            with col_g2:
+                selected_zones = st.multiselect(
+                    "表示する難易度帯 (複数選択可)",
+                    options=options_zones,
+                    default=default_zones
+                )
         else:
+            graph_draw_mode = "スコア"
             options_zones = ['TTT', 'TTI', 'TII', 'III', 'IIE', 'IEE', 'EEE', 'EEH', 'EHH', 'HHH', 'HHV', 'HVV', 'VVV', 'VVA', 'VAA', 'AAA', 'AAN', 'ANN', 'NNN']
             
             # 動的に上位20,000位以内のスコア帯ブロックを計算
@@ -905,8 +907,7 @@ else:
             default_zones = [z for z in options_zones if z in top_brackets]
             if not default_zones:
                 default_zones = ['TTI']
-            
-        with col_g2:
+                
             selected_zones = st.multiselect(
                 "表示する難易度帯 (複数選択可)",
                 options=options_zones,
