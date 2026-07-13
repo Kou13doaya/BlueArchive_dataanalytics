@@ -226,7 +226,10 @@ def find_nearest_player(df, target_score):
         return 0, 0
     idx = (df['score'] - target_score).abs().idxmin()
     actual_score = df.iloc[idx]['score']
-    actual_rank = idx + 1
+    if 'rank' in df.columns:
+        actual_rank = df.iloc[idx]['rank']
+    else:
+        actual_rank = idx + 1
     return actual_rank, actual_score
 
 

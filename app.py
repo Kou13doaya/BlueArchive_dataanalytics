@@ -645,9 +645,13 @@ else:
     # 3. クリア状況サマリー・プレイヤー検索 (上から3番目 - 折りたたみ)
     # ====================================================
     with st.expander("クリア状況サマリー・プレイヤー検索", expanded=True):
-        # 検索用データ: status == 'ocr' のみ（空データを含めない）
-        search_df = df[df['status'] == 'ocr'] if 'status' in df.columns else df
-        sorted_search_df = search_df.sort_values('score', ascending=False).reset_index(drop=True)
+        # 検索用データ: status == 'ocr' かつ score が NaN でないもの（元の順位を保持する）
+        search_df = df.copy()
+        if 'status' in search_df.columns:
+            search_df = search_df[search_df['status'] == 'ocr']
+        search_df = search_df[search_df['score'].notna()]
+        search_df.index.name = 'rank'
+        sorted_search_df = search_df.sort_values('score', ascending=False).reset_index()
         
         # 統合検索文字列の入力 (プレースホルダーに情報を集約)
         if app_mode.startswith("総力戦"):
@@ -740,80 +744,91 @@ else:
                                 est_score = base_score + (3600 - total_seconds) * k
                                 
                                 act_rank, act_score = find_nearest_player(sorted_search_df, est_score)
-                                act_idx = int(act_rank) - 1
-                                matched_row = sorted_search_df.iloc[act_idx]
-                                matched_score_val = matched_row['score']
-                                act_diff, act_t_sec = score_to_clear_time(matched_score_val, event_id)
-                                
-                                if not detected_diff:
-                                    if act_diff == diff_candidate:
+                                if act_rank in df.index:
+                                    matched_row = df.loc[act_rank]
+                                    matched_score_val = matched_row['score']
+                                    act_diff, act_t_sec = score_to_clear_time(matched_score_val, event_id)
+                                    
+                                    if not detected_diff:
+                                        if act_diff == diff_candidate:
+                                            target_records.append({
+                                                "順位": f"{int(act_rank):,} 位",
+                                                "クリア難易度": act_diff,
+                                                "スコア": f"{int(matched_score_val):,}",
+                                                "クリアタイム": format_time_short(act_t_sec),
+                                                "sort_key": int(act_rank) - 1
+                                            })
+                                    else:
                                         target_records.append({
                                             "順位": f"{int(act_rank):,} 位",
                                             "クリア難易度": act_diff,
                                             "スコア": f"{int(matched_score_val):,}",
                                             "クリアタイム": format_time_short(act_t_sec),
-                                            "sort_key": act_idx
+                                            "sort_key": int(act_rank) - 1
                                         })
-                                else:
-                                    target_records.append({
-                                        "順位": f"{int(act_rank):,} 位",
-                                        "クリア難易度": act_diff,
-                                        "スコア": f"{int(matched_score_val):,}",
-                                        "クリアタイム": format_time_short(act_t_sec),
-                                        "sort_key": act_idx
-                                    })
                         
                         if not detected_diff and not target_records:
                             for diff_candidate in params.keys():
                                 base_score, k = params[diff_candidate]
                                 est_score = base_score + (3600 - total_seconds) * k
                                 act_rank, act_score = find_nearest_player(sorted_search_df, est_score)
-                                act_idx = int(act_rank) - 1
-                                matched_row = sorted_search_df.iloc[act_idx]
-                                matched_score_val = matched_row['score']
-                                act_diff, act_t_sec = score_to_clear_time(matched_score_val, event_id)
-                                target_records.append({
-                                    "順位": f"{int(act_rank):,} 位",
-                                    "クリア難易度": act_diff,
-                                    "スコア": f"{int(matched_score_val):,}",
-                                    "クリアタイム": format_time_short(act_t_sec),
-                                    "sort_key": act_idx
-                                })
+                                if act_rank in df.index:
+                                    matched_row = df.loc[act_rank]
+                                    matched_score_val = matched_row['score']
+                                    act_diff, act_t_sec = score_to_clear_time(matched_score_val, event_id)
+                                    target_records.append({
+                                        "順位": f"{int(act_rank):,} 位",
+                                        "クリア難易度": act_diff,
+                                        "スコア": f"{int(matched_score_val):,}",
+                                        "クリアタイム": format_time_short(act_t_sec),
+                                        "sort_key": int(act_rank) - 1
+                                    })
             
             if not target_records:
                 clean_query = query.replace(",", "").replace("位", "").replace("人", "").strip()
                 if clean_query.isdigit():
                     val = int(clean_query)
-                    max_rank = len(sorted_search_df)
+                    max_rank = df.index.max() if (df is not None and not df.empty) else 0
                     if val <= max_rank:
-                        target_idx = min(max(1, val), max_rank) - 1
-                        matched_row = sorted_search_df.iloc[target_idx]
-                        matched_score_val = matched_row['score']
-                        rec = {
-                            "順位": f"{target_idx + 1:,} 位",
-                            "スコア": f"{int(matched_score_val):,}",
-                            "sort_key": target_idx
-                        }
-                        if app_mode.startswith("総力戦"):
-                            diff, t_sec = score_to_clear_time(matched_score_val, event_id)
-                            rec["クリア難易度"] = diff
-                            rec["クリアタイム"] = format_time_short(t_sec)
-                        target_records.append(rec)
+                        if val in df.index:
+                            matched_row = df.loc[val]
+                            matched_score_val = matched_row['score']
+                            
+                            if pd.isna(matched_score_val) or matched_score_val is pd.NA:
+                                rec = {
+                                    "順位": f"{val:,} 位",
+                                    "スコア": "欠損",
+                                    "sort_key": val - 1
+                                }
+                                if app_mode.startswith("総力戦"):
+                                    rec["クリア難易度"] = "不明"
+                                    rec["クリアタイム"] = "不明"
+                            else:
+                                rec = {
+                                    "順位": f"{val:,} 位",
+                                    "スコア": f"{int(matched_score_val):,}",
+                                    "sort_key": val - 1
+                                }
+                                if app_mode.startswith("総力戦"):
+                                    diff, t_sec = score_to_clear_time(matched_score_val, event_id)
+                                    rec["クリア難易度"] = diff
+                                    rec["クリアタイム"] = format_time_short(t_sec)
+                            target_records.append(rec)
                     else:
                         act_rank, act_score = find_nearest_player(sorted_search_df, val)
-                        act_idx = int(act_rank) - 1
-                        matched_row = sorted_search_df.iloc[act_idx]
-                        matched_score_val = matched_row['score']
-                        rec = {
-                            "順位": f"{act_idx + 1:,} 位",
-                            "スコア": f"{int(matched_score_val):,}",
-                            "sort_key": act_idx
-                        }
-                        if app_mode.startswith("総力戦"):
-                            diff, t_sec = score_to_clear_time(matched_score_val, event_id)
-                            rec["クリア難易度"] = diff
-                            rec["クリアタイム"] = format_time_short(t_sec)
-                        target_records.append(rec)
+                        if act_rank in df.index:
+                            matched_row = df.loc[act_rank]
+                            matched_score_val = matched_row['score']
+                            rec = {
+                                "順位": f"{int(act_rank):,} 位",
+                                "スコア": f"{int(matched_score_val):,}",
+                                "sort_key": int(act_rank) - 1
+                            }
+                            if app_mode.startswith("総力戦"):
+                                diff, t_sec = score_to_clear_time(matched_score_val, event_id)
+                                rec["クリア難易度"] = diff
+                                rec["クリアタイム"] = format_time_short(t_sec)
+                            target_records.append(rec)
                 else:
                     if app_mode.startswith("総力戦"):
                         st.error("⚠️ 入力された形式を理解できませんでした。順位、スコア、またはタイムを入力してください。")
