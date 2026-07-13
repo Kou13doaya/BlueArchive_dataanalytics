@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
+import re
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from common.event_metadata import EVENT_META, normalize_event_id
 
 # ==========================================
 # 設定：デザイン
@@ -173,7 +175,7 @@ def draw_grand_assault_graph(df, event_id=None, suffix=None, view_mode='High', s
         bar_y = y_pos_bar[i]
         if count > 0:
             font_w = 'bold' if row['type'] == 'compressed' else 'normal'
-            ax.text(plot_val + (clip_limit * 0.01), bar_y, f"{int(count):,}", va='center', color=TEXT_COLOR, fontsize=9, fontweight=font_w)
+            ax.text(plot_val + (clip_limit * 0.01), bar_y, f"{int(count):,}", va='center', color=TEXT_COLOR, fontsize=10, fontweight=font_w)
         elif row['type'] == 'compressed':
              ax.text(clip_limit * 0.01, bar_y, "Gap", va='center', color='gray', fontsize=9, fontstyle='italic')
 
@@ -190,28 +192,28 @@ def draw_grand_assault_graph(df, event_id=None, suffix=None, view_mode='High', s
     visible_min = graph_data['sort_key'].min()
     visible_max = graph_data['sort_key'].max()
 
-    if score_plat and visible_min <= score_plat <= visible_max:
+    if score_plat is not None and visible_min <= score_plat <= visible_max:
         y = get_y(score_plat)
         if 0 <= y <= num_bars:
-            ax.axhline(y, color='purple', linewidth=1.5, alpha=0.9)
+            ax.axhline(y, color='purple', linewidth=1.5, linestyle='-', alpha=0.9)
             ax.text(ax.get_xlim()[1], y, f" Platinum (20,000th): {score_plat:,} ",
                     va='bottom', ha='right', color='white', fontweight='bold', fontsize=9,
-                    bbox=dict(facecolor='purple', alpha=0.8, edgecolor='none'))
+                    bbox=dict(boxstyle="round,pad=0.2", fc="purple", ec="none", alpha=0.9))
 
-    if score_gold and visible_min <= score_gold <= visible_max:
+    if score_gold is not None and visible_min <= score_gold <= visible_max:
         y = get_y(score_gold)
         if 0 <= y <= num_bars:
-            ax.axhline(y, color='#daa520', linewidth=1.5, alpha=0.9)
+            ax.axhline(y, color='#daa520', linewidth=1.5, linestyle='-', alpha=0.9)
             ax.text(ax.get_xlim()[1], y, f" Gold (120,000th): {score_gold:,} ",
                     va='bottom', ha='right', color='black', fontweight='bold', fontsize=9,
-                    bbox=dict(facecolor='#ffd700', alpha=0.8, edgecolor='none'))
+                    bbox=dict(boxstyle="round,pad=0.2", fc="#ffd700", ec="none", alpha=0.9))
 
     ax.set_ylim(0, num_bars)
+    ax.set_ylabel('Score Zones', fontsize=12, color=TEXT_COLOR)
+
     # EVENT_METAからタイトル文字列を作成
     title_suffix = ""
     if event_id:
-        from common.event_metadata import EVENT_META, normalize_event_id
-        import re
         meta = EVENT_META.get(normalize_event_id(event_id))
         if meta:
             season = meta.get('season', '')

@@ -151,10 +151,12 @@ def cached_total_assault_graph(df, event_id, draw_mode, selected_zones_tuple, co
     )
 
 @st.cache_data(show_spinner=False)
-def cached_grand_assault_graph(df, view_mode, r_min, r_max, comp, bin_size):
+def cached_grand_assault_graph(df, event_id, suffix, view_mode, r_min, r_max, comp, bin_size):
     settings = {'range': [r_min, r_max], 'compress': comp, 'bin': bin_size}
     return grand_assault.draw_grand_assault_graph(
         df=df,
+        event_id=event_id,
+        suffix=suffix,
         view_mode=view_mode,
         settings=settings,
         save_path=None,
@@ -1089,29 +1091,33 @@ else:
                 if view_mode == 'High':
                     h_col1, h_col2 = st.columns(2)
                     with h_col1:
-                        h_range = st.slider("表示範囲", min_value=73740000, max_value=121044000, value=[98860000, 121044000], step=100000, format="%d", key="h_g_range")
-                        h_comp = st.slider("下限スコア", min_value=73740000, max_value=121044000, value=107000000, step=10000, format="%d", key="h_g_comp")
+                        # 表示範囲の上限・下限をそれぞれ number_input で設定
+                        h_range_min = st.number_input("表示範囲 (下限)", min_value=73740000, max_value=121044000, value=98860000, step=10000, key="h_g_range_min")
+                        h_range_max = st.number_input("表示範囲 (上限)", min_value=73740000, max_value=121044000, value=121044000, step=10000, key="h_g_range_max")
+                        h_comp = st.number_input("下限スコア", min_value=73740000, max_value=121044000, value=107000000, step=10000, key="h_g_comp")
                     with h_col2:
                         h_bin = st.number_input("グラフ１本当たりの幅", min_value=100, max_value=100000, value=10000, step=500, key="h_g_bin")
-                    settings = {'range': h_range, 'compress': h_comp, 'bin': h_bin}
+                    settings = {'range': [h_range_min, h_range_max], 'compress': h_comp, 'bin': h_bin}
                     
                 elif view_mode == 'Mid':
                     m_col1, m_col2 = st.columns(2)
                     with m_col1:
-                        m_range = st.slider("表示範囲", min_value=41336000, max_value=83784000, value=[46500000, 83784000], step=100000, format="%d", key="m_g_range")
-                        m_comp = st.slider("下限スコア", min_value=41336000, max_value=83784000, value=69932800, step=10000, format="%d", key="m_g_comp")
+                        m_range_min = st.number_input("表示範囲 (下限)", min_value=41336000, max_value=83784000, value=46500000, step=10000, key="m_g_range_min")
+                        m_range_max = st.number_input("表示範囲 (上限)", min_value=41336000, max_value=83784000, value=83784000, step=10000, key="m_g_range_max")
+                        m_comp = st.number_input("下限スコア", min_value=41336000, max_value=83784000, value=69932800, step=10000, key="m_g_comp")
                     with m_col2:
                         m_bin = st.number_input("グラフ１本当たりの幅", min_value=100, max_value=100000, value=10000, step=500, key="m_g_bin")
-                    settings = {'range': m_range, 'compress': m_comp, 'bin': m_bin}
+                    settings = {'range': [m_range_min, m_range_max], 'compress': m_comp, 'bin': m_bin}
                     
                 else: # Low
                     l_col1, l_col2 = st.columns(2)
                     with l_col1:
-                        l_range = st.slider("表示範囲", min_value=0, max_value=46032000, value=[43440000, 46032000], step=100000, format="%d", key="l_g_range")
-                        l_comp = st.slider("下限スコア", min_value=0, max_value=46032000, value=44995200, step=10000, format="%d", key="l_g_comp")
+                        l_range_min = st.number_input("表示範囲 (下限)", min_value=0, max_value=46032000, value=43440000, step=10000, key="l_g_range_min")
+                        l_range_max = st.number_input("表示範囲 (上限)", min_value=0, max_value=46032000, value=46032000, step=10000, key="l_g_range_max")
+                        l_comp = st.number_input("下限スコア", min_value=0, max_value=46032000, value=44995200, step=10000, key="l_g_comp")
                     with l_col2:
                         l_bin = st.number_input("グラフ１本当たりの幅", min_value=100, max_value=100000, value=10000, step=500, key="l_g_bin")
-                    settings = {'range': l_range, 'compress': l_comp, 'bin': l_bin}
+                    settings = {'range': [l_range_min, l_range_max], 'compress': l_comp, 'bin': l_bin}
 
             # グラフ用データ: ocrのみ
             graph_df = df[df['status'] == 'ocr'] if 'status' in df.columns else df
@@ -1119,6 +1125,8 @@ else:
             # 描画
             fig = cached_grand_assault_graph(
                 df=graph_df,
+                event_id=event_id,
+                suffix=selected_suffix,
                 view_mode=view_mode,
                 r_min=settings['range'][0],
                 r_max=settings['range'][1],
