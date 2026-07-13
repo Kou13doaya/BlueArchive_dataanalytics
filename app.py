@@ -138,10 +138,11 @@ def load_cached_data(event_id, suffix=None):
     return loader.load_data(event_id, suffix=suffix)
 
 @st.cache_data(show_spinner=False)
-def cached_total_assault_graph(df, event_id, draw_mode, selected_zones_tuple, compress_tuple, bin_tuple):
+def cached_total_assault_graph(df, event_id, suffix, draw_mode, selected_zones_tuple, compress_tuple, bin_tuple):
     return total_assault.draw_parametric_graph(
         df=df,
         event_id=event_id,
+        suffix=suffix,
         draw_mode=draw_mode,
         selected_zones=list(selected_zones_tuple),
         compress_settings=dict(compress_tuple),
@@ -1070,6 +1071,7 @@ else:
             fig = cached_total_assault_graph(
                 df=graph_df,
                 event_id=event_id,
+                suffix=selected_suffix,
                 draw_mode=graph_draw_mode,
                 selected_zones_tuple=tuple(selected_zones),
                 compress_tuple=tuple(compress_settings.items()),
