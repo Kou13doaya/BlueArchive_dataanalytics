@@ -872,7 +872,7 @@ else:
         is_total_assault = app_mode.startswith("総力戦")
         
         def format_bracket(zone):
-            abbrev_map = {'T': 'Tor', 'I': 'Ins', 'E': 'Ext', 'H': 'Hco', 'V': 'Vha', 'A': 'Hrd', 'N': 'Nor', 'L': 'Lun'}
+            abbrev_map = {'T': 'TMT', 'I': 'Ins', 'E': 'Ext', 'H': 'Hco', 'V': 'Vha', 'A': 'Hrd', 'N': 'Nor', 'L': 'Lun'}
             if zone in ['Lunatic', 'Torment', 'Insane', 'Extreme', 'Hardcore', 'VeryHard', 'Hard', 'Normal']:
                 return zone
             if zone == 'Other':

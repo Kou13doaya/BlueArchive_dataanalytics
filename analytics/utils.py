@@ -224,7 +224,7 @@ def make_grand_assault_summary(df, event_id=None):
 
     difficulty_map = {
         'L': 'Lun',
-        'T': 'Tor',
+        'T': 'TMT',
         'I': 'Ins',
         'E': 'Ext',
         'H': 'Hco',
