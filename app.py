@@ -138,11 +138,10 @@ def load_cached_data(event_id, suffix=None):
     return loader.load_data(event_id, suffix=suffix)
 
 @st.cache_data(show_spinner=False)
-def cached_total_assault_graph(df, event_id, suffix, draw_mode, selected_zones_tuple, compress_tuple, bin_tuple):
+def cached_total_assault_graph(df, event_id, draw_mode, selected_zones_tuple, compress_tuple, bin_tuple):
     return total_assault.draw_parametric_graph(
         df=df,
         event_id=event_id,
-        suffix=suffix,
         draw_mode=draw_mode,
         selected_zones=list(selected_zones_tuple),
         compress_settings=dict(compress_tuple),
@@ -251,27 +250,38 @@ if event_id:
     selected_suffix = None
     if event_id in event_suffix_map:
         suffixes = event_suffix_map[event_id]
+        def format_suffix(s):
+            if s == "last":
+                return "最終結果"
+            elif s == "":
+                return "デフォルト"
+            else:
+                # 20260603_1100 -> 2026/06/03 11:00 のように整形
+                match_dt = re.match(r"^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})$", s)
+                if match_dt:
+                    return f"{match_dt.group(1)}/{match_dt.group(2)}/{match_dt.group(3)} {match_dt.group(4)}:{match_dt.group(5)}"
+                return s
+        
         if len(suffixes) > 1:
-            def format_suffix(s):
-                if s == "last":
-                    return "最終結果"
-                elif s == "":
-                    return "デフォルト"
-                else:
-                    # 20260603_1100 -> 2026/06/03 11:00 のように整形
-                    match_dt = re.match(r"^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})$", s)
-                    if match_dt:
-                        return f"{match_dt.group(1)}/{match_dt.group(2)}/{match_dt.group(3)} {match_dt.group(4)}:{match_dt.group(5)}"
-                    return s
-            
             selected_suffix = st.sidebar.selectbox(
                 "データ取得時期",
                 suffixes,
                 format_func=format_suffix,
                 key="data_version_suffix"
             )
+        elif len(suffixes) == 1:
+            # 選択肢が1つだけの場合はセレクトボックスを無効化（disabled）して表示
+            selected_suffix = suffixes[0]
+            st.sidebar.selectbox(
+                "データ取得時期",
+                suffixes,
+                index=0,
+                format_func=format_suffix,
+                disabled=True,
+                key="data_version_suffix"
+            )
         else:
-            selected_suffix = suffixes[0] if suffixes else None
+            selected_suffix = None
 
     # データ読み込み
     df = None
@@ -1071,7 +1081,6 @@ else:
             fig = cached_total_assault_graph(
                 df=graph_df,
                 event_id=event_id,
-                suffix=selected_suffix,
                 draw_mode=graph_draw_mode,
                 selected_zones_tuple=tuple(selected_zones),
                 compress_tuple=tuple(compress_settings.items()),
