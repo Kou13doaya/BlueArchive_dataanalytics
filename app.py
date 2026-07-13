@@ -870,18 +870,22 @@ else:
     # 4. スコア分布グラフ (上から4番目)
     # ====================================================
     with st.expander("スコア・タイム分布グラフ", expanded=True):
+        is_total_assault = app_mode.startswith("総力戦")
+        
         # スコアとタイム両対応の表示モード選択を横並びで配置
         col_g1, col_g2 = st.columns(2)
         with col_g1:
-            graph_draw_mode = st.radio(
-                "表示データ形式",
-                ["スコア", "タイム"],
-                index=0,
-                horizontal=True,
-                key="graph_draw_mode_select"
-            )
-        
-        is_total_assault = app_mode.startswith("総力戦")
+            if is_total_assault:
+                graph_draw_mode = st.radio(
+                    "表示データ形式",
+                    ["スコア", "タイム"],
+                    index=0,
+                    horizontal=True,
+                    key="graph_draw_mode_select"
+                )
+            else:
+                graph_draw_mode = "スコア"
+                st.markdown("<div style='padding-top: 10px;'><strong>表示データ形式:</strong> スコア固定</div>", unsafe_allow_html=True)
         
         if is_total_assault:
             options_zones = ['Lunatic', 'Torment', 'Insane', 'Extreme', 'Hardcore', 'VeryHard', 'Hard', 'Normal']
