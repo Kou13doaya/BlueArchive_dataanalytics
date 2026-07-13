@@ -1005,22 +1005,17 @@ else:
             auto_defaults[zone] = auto_compress_threshold(df, z_min, z_max, percentile=pct)
 
         with st.expander("難易度別詳細パラメータ設定", expanded=False):
-            if graph_draw_mode == "タイム":
+            if graph_draw_mode == "タイム" and is_total_assault:
                 max_min = 60
                 max_sec = 0
                 limit_text = "60分00秒"
                 
                 default_time_bins = {z: 1.0 for z in ordered_zones}
-                if is_total_assault:
-                    default_time_bins["Lunatic"] = 60.0
-                    default_time_bins["Torment"] = 0.5
-                    default_time_bins["Insane"] = 0.5
-                    default_time_bins["Extreme"] = 10.0
-                    default_time_bins["Hardcore"] = 10.0
-                else:
-                    default_time_bins["TTT"] = 1.0
-                    default_time_bins["TTI"] = 1.0
-                    default_time_bins["TII"] = 1.0
+                default_time_bins["Lunatic"] = 60.0
+                default_time_bins["Torment"] = 0.5
+                default_time_bins["Insane"] = 0.5
+                default_time_bins["Extreme"] = 10.0
+                default_time_bins["Hardcore"] = 10.0
                 
                 active_zones = [z for z in ordered_zones if z in selected_zones]
                 compress_settings = {}
@@ -1029,16 +1024,8 @@ else:
                 for zone in ordered_zones:
                     base_score, k = calc_params[zone]
                     auto_def = auto_defaults[zone]
-                    
-                    # 大決戦時のベーススコア算出
-                    if not is_total_assault:
-                        # comboのmax_scoreを取得
-                        max_score = sum(params[char][0] for char in zone)
-                        auto_time = max(0.0, (max_score - auto_def) / k)
-                    else:
-                        auto_time = max(0.0, 3600 - (auto_def - base_score) / k)
-                        auto_time = min(auto_time, 3600.0)
-                        
+                    auto_time = max(0.0, 3600 - (auto_def - base_score) / k)
+                    auto_time = min(auto_time, 3600.0)
                     compress_settings[zone] = auto_def
                     bin_settings[zone] = int(default_time_bins[zone] * k)
                     
@@ -1053,12 +1040,8 @@ else:
                             
                             base_score, k = calc_params[zone]
                             auto_def = auto_defaults[zone]
-                            if not is_total_assault:
-                                max_score = sum(params[char][0] for char in zone)
-                                auto_time = max(0.0, (max_score - auto_def) / k)
-                            else:
-                                auto_time = max(0.0, 3600 - (auto_def - base_score) / k)
-                                auto_time = min(auto_time, 3600.0)
+                            auto_time = max(0.0, 3600 - (auto_def - base_score) / k)
+                            auto_time = min(auto_time, 3600.0)
                             
                             def_min = int(auto_time // 60)
                             def_sec = float(round(auto_time % 60, 3))
@@ -1071,17 +1054,68 @@ else:
                                 t_sec_val = st.number_input("秒", min_value=0.0, max_value=max_s_val, value=def_sec, step=0.1, format="%.3f", key=f"{zone}_t_s")
                             
                             total_sec = t_min_val * 60 + t_sec_val
-                            if not is_total_assault:
-                                max_score = sum(params[char][0] for char in zone)
-                                compress_settings[zone] = max_score - total_sec * k
-                            else:
-                                compress_settings[zone] = base_score + (3600 - total_sec) * k
-                                bin_settings[zone] = bin_val
+                            compress_settings[zone] = base_score + (3600 - total_sec) * k
+                            
+                            default_bin_sec = default_time_bins[zone]
+                            step_val = 0.1 if zone in ["Torment", "Insane"] else (1.0 if default_bin_sec >= 1.0 else 0.5)
+                            time_bin = st.number_input("グラフ１本当たりの幅 (秒)", min_value=0.1, max_value=120.0, value=default_bin_sec, step=step_val, key=f"{zone}_t_bin")
+                            bin_settings[zone] = int(time_bin * k)
 
-            # グラフ用データ: ocrのみ
-            graph_df = df[df['status'] == 'ocr'] if 'status' in df.columns else df
+            else:
+                # スコアモード（大決戦は常にこちら、総力戦もスコア選択時）
+                default_score_bins = {z: 10000 for z in ordered_zones}
+                if is_total_assault:
+                    default_score_bins["Lunatic"] = 150000
+                    default_score_bins["Torment"] = 1500
+                    default_score_bins["Insane"] = 1500
+                    default_score_bins["Extreme"] = 30000
+                    default_score_bins["Hardcore"] = 30000
+                
+                active_zones = [z for z in ordered_zones if z in selected_zones]
+                compress_settings = {}
+                bin_settings = {}
+                
+                for zone in ordered_zones:
+                    compress_settings[zone] = auto_defaults[zone]
+                    bin_settings[zone] = default_score_bins.get(zone, 10000)
+                    
+                if not active_zones:
+                    st.info("表示する難易度帯が選択されていません。")
+                else:
+                    cols = st.columns(len(active_zones))
+                    for col_idx, zone in enumerate(active_zones):
+                        z_min, z_max = zone_ranges[zone]
+                        auto_def = auto_defaults[zone]
+                        
+                        with cols[col_idx]:
+                            st.markdown(f"**{zone} 設定**")
+                            comp_val = st.number_input(
+                                "下限スコア",
+                                min_value=int(z_min),
+                                max_value=int(z_max),
+                                value=int(auto_def),
+                                step=1000 if (z_max - z_min) < 100000 else 10000,
+                                help=f"範囲: {int(z_min):,} ～ {int(z_max):,}",
+                                key=f"{zone}_s_compress"
+                            )
+                            compress_settings[zone] = comp_val
+                            
+                            default_bin_val = default_score_bins.get(zone, 10000)
+                            bin_val = st.number_input(
+                                "グラフ１本当たりの幅",
+                                min_value=10,
+                                max_value=1000000,
+                                value=default_bin_val,
+                                step=100 if default_bin_val < 5000 else 1000,
+                                key=f"{zone}_s_bin"
+                            )
+                            bin_settings[zone] = bin_val
 
-            # 描画
+        # グラフ用データ: ocrのみ
+        graph_df = df[df['status'] == 'ocr'] if 'status' in df.columns else df
+
+        # 描画
+        if is_total_assault:
             fig = cached_total_assault_graph(
                 df=graph_df,
                 event_id=event_id,
@@ -1090,9 +1124,19 @@ else:
                 compress_tuple=tuple(compress_settings.items()),
                 bin_tuple=tuple(bin_settings.items())
             )
-            if fig:
-                st.pyplot(fig)
-                plt.close(fig)
+        else:
+            fig = cached_grand_assault_graph(
+                df=graph_df,
+                event_id=event_id,
+                suffix=selected_suffix,
+                draw_mode=graph_draw_mode,
+                selected_zones_tuple=tuple(selected_zones),
+                compress_tuple=tuple(compress_settings.items()),
+                bin_tuple=tuple(bin_settings.items())
+            )
+        if fig:
+            st.pyplot(fig)
+            plt.close(fig)
                 
 
 
