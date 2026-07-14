@@ -50,7 +50,7 @@ def create_dynamic_histogram(df, df_target, dynamic_settings):
         zone_data = df[(df['score'] >= current_border) & (df['score'] < upper)]
         actual_max_scores[name] = int(zone_data['score'].max()) if not zone_data.empty else current_border
 
-    current_ceiling = global_max + dynamic_settings[diff_names[0]]['bin']
+    current_ceiling = global_max + 1
 
     for i, name in enumerate(diff_names):
         settings = dynamic_settings[name]

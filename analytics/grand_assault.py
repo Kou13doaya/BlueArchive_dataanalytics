@@ -59,11 +59,11 @@ def create_single_block_histogram(df_target, settings, block_name):
         if estimated_bins > 150:
             bin_size = int(np.ceil((actual_max - comp_below) / 150))
             
-        grid_min = (comp_below // bin_size) * bin_size
+        grid_min = comp_below
         grid_max = (actual_max // bin_size) * bin_size
-        full_index = range(int(grid_min), int(grid_max) + bin_size, bin_size)
+        full_index = range(int(grid_min), int(grid_max) + 1, bin_size)
 
-        detail_df['binned'] = (detail_df['score'] // bin_size) * bin_size
+        detail_df['binned'] = comp_below + ((detail_df['score'] - comp_below) // bin_size) * bin_size
         counts = detail_df['binned'].value_counts()
         counts_filled = counts.reindex(full_index, fill_value=0).sort_index(ascending=True)
 
