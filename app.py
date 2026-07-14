@@ -1108,7 +1108,7 @@ else:
                             default_time_str = format_time_short(auto_time)
                             
                             time_str_input = st.text_input(
-                                "下限タイム (分:秒.ミリ秒)",
+                                "下限タイム",
                                 value=default_time_str,
                                 key=f"{zone}_t_str",
                                 help="例: 2:20.833 や 12:00.000"
@@ -1141,7 +1141,7 @@ else:
                             
                             default_bin_sec = default_time_bins[zone]
                             step_val = 0.1 if zone in ["Torment", "Insane"] else (1.0 if default_bin_sec >= 1.0 else 0.5)
-                            time_bin = st.number_input("グラフ１本当たりの幅 (秒)", min_value=0.1, max_value=120.0, value=default_bin_sec, step=step_val, key=f"{zone}_t_bin")
+                            time_bin = st.number_input("グラフ１本当たりの幅", min_value=0.1, max_value=120.0, value=default_bin_sec, step=step_val, key=f"{zone}_t_bin")
                             bin_settings[zone] = int(time_bin * k)
 
             else:
