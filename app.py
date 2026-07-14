@@ -868,8 +868,9 @@ else:
     # ====================================================
     # 4. スコア分布グラフ (上から4番目)
     # ====================================================
-    with st.expander("スコア・タイム分布グラフ", expanded=True):
-        is_total_assault = app_mode.startswith("総力戦")
+    is_total_assault = app_mode.startswith("総力戦")
+    expander_label = "スコア・タイム分布グラフ" if is_total_assault else "スコア分布グラフ"
+    with st.expander(expander_label, expanded=True):
         
         def format_bracket(zone):
             abbrev_map = {'T': 'TMT', 'I': 'Ins', 'E': 'Ext', 'H': 'Hco', 'V': 'Vha', 'A': 'Hrd', 'N': 'Nor', 'L': 'Lun'}
