@@ -224,22 +224,6 @@ def draw_parametric_graph(df, event_id, suffix=None, draw_mode='スコア', sele
         print("[ERROR] 選択された難易度のデータはありません")
         return
 
-    # 最上位の空欄追加 (Lunaticが選択されている場合のみ)
-    if 'Lunatic' in selected_zones:
-        if not graph_data.empty:
-            last_row = graph_data.iloc[-1]
-            if last_row['difficulty'] == 'Lunatic' and last_row['type'] == 'detail':
-                top_score = last_row['sort_key']
-                next_score = top_score + l_bin
-                new_row = pd.DataFrame([{
-                    'label': f"{next_score:,}",
-                    'count': 0,
-                    'type': 'detail',
-                    'sort_key': next_score,
-                    'color': BAR_COLOR,
-                    'difficulty': 'Lunatic'
-                }])
-                graph_data = pd.concat([graph_data, new_row], ignore_index=True)
 
     # タイム表示の場合はラベルをクリアタイムに変換
     if draw_mode == 'タイム':
