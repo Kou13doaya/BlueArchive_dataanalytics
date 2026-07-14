@@ -75,14 +75,14 @@ def create_dynamic_histogram(df, df_target, dynamic_settings):
             if estimated_bins > 150:
                 bin_size = int(np.ceil((current_ceiling - compress_threshold) / 150))
                 
-            # 各難易度の base_score (border) を起点としてグリッド分割を行う
-            # これにより、タイムモード時に小数点以下に端数（.333 や .667）が出ず、きれいに .000 秒刻みになります。
-            grid_min = border + ((compress_threshold - border) // bin_size) * bin_size
-            grid_max = border + ((current_ceiling - border) // bin_size) * bin_size
+            # compress_threshold を起点としてグリッド分割を行う
+            # （旧: border 起点だと compress_threshold が border の bin_size 倍数でない場合にズレが生じるため修正）
+            grid_min = compress_threshold
+            grid_max = compress_threshold + int(np.ceil((current_ceiling - compress_threshold) / bin_size)) * bin_size
             full_index = range(int(grid_min), int(grid_max), bin_size)
 
             if not detail_df.empty:
-                detail_df['binned'] = border + ((detail_df['score'] - border) // bin_size) * bin_size
+                detail_df['binned'] = compress_threshold + ((detail_df['score'] - compress_threshold) // bin_size) * bin_size
                 counts = detail_df['binned'].value_counts()
                 counts_filled = counts.reindex(full_index, fill_value=0).sort_index(ascending=True)
             else:
