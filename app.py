@@ -101,7 +101,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="main-title">Blue Archive Data Analytics</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">総力戦・大決戦データ分析ツール (Preview3)</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">総力戦・大決戦データ分析ツール (Preview4)</div>', unsafe_allow_html=True)
 
 # ----------------------------------------------------
 # ユーティリティ関数のインポート
