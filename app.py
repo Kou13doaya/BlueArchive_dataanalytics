@@ -1103,17 +1103,40 @@ else:
                             else:
                                 auto_time = math.ceil(auto_time)
                             
-                            def_min = int(auto_time // 60)
-                            def_sec = float(round(auto_time % 60, 3))
+                            # M:SS.ms 形式にフォーマットして初期値とする
+                            from common.score_converter import format_time_short
+                            default_time_str = format_time_short(auto_time)
                             
-                            col_m, col_s = st.columns(2)
-                            with col_m:
-                                t_min_val = st.number_input("分", min_value=0, max_value=max_min, value=def_min, step=1, key=f"{zone}_t_m")
-                            with col_s:
-                                max_s_val = 0.0 if t_min_val == max_min else 59.999
-                                t_sec_val = st.number_input("秒", min_value=0.0, max_value=max_s_val, value=def_sec, step=0.1, format="%.3f", key=f"{zone}_t_s")
+                            time_str_input = st.text_input(
+                                "下限タイム (分:秒.ミリ秒)",
+                                value=default_time_str,
+                                key=f"{zone}_t_str",
+                                help="例: 2:20.833 や 12:00.000"
+                            )
                             
-                            total_sec = t_min_val * 60 + t_sec_val
+                            total_sec = None
+                            try:
+                                parts = time_str_input.split(':')
+                                if len(parts) == 2:
+                                    minutes = int(parts[0])
+                                    sec_parts = parts[1].split('.')
+                                    if len(sec_parts) == 2:
+                                        seconds = int(sec_parts[0])
+                                        ms = int(sec_parts[1])
+                                        total_sec = minutes * 60 + seconds + ms / 1000.0
+                                    else:
+                                        seconds = float(parts[1])
+                                        total_sec = minutes * 60 + seconds
+                                else:
+                                    total_sec = float(time_str_input)
+                            except Exception:
+                                pass
+                                
+                            if total_sec is None or total_sec < 0:
+                                total_sec = auto_time
+                                if time_str_input:
+                                    st.caption("⚠️ 正しい形式で入力してください。")
+                                    
                             compress_settings[zone] = base_score + (3600 - total_sec) * k
                             
                             default_bin_sec = default_time_bins[zone]
