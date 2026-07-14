@@ -1059,6 +1059,18 @@ else:
             val = (val // 10000) * 10000
             auto_defaults[zone] = max(int(z_min), val)
 
+        # auto_defaults が変化したときは st.number_input のセッション状態を強制リセットする
+        # （Streamlit は key が同じ number_input の value= 引数を初回以外無視するため）
+        auto_hash_key = f"auto_defaults_hash_{event_id}"
+        current_hash = str({z: auto_defaults[z] for z in ordered_zones})
+        if st.session_state.get(auto_hash_key) != current_hash:
+            st.session_state[auto_hash_key] = current_hash
+            for zone in ordered_zones:
+                for suffix in ["_s_compress", "_s_bin", "_t_str", "_t_bin"]:
+                    sess_key = f"{zone}{suffix}"
+                    if sess_key in st.session_state:
+                        del st.session_state[sess_key]
+
         with st.expander("難易度別詳細パラメータ設定", expanded=False):
             if graph_draw_mode == "タイム" and is_total_assault:
                 max_min = 60
