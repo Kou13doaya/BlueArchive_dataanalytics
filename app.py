@@ -1091,8 +1091,6 @@ else:
                     for col_idx, zone in enumerate(active_zones):
                         with cols[col_idx]:
                             st.markdown(f"**{format_bracket(zone)} 設定**")
-                            st.markdown("<small>下限タイム</small>", unsafe_allow_html=True)
-                            
                             base_score, k = calc_params[zone]
                             auto_def = auto_defaults[zone]
                             auto_time = max(0.0, 3600 - (auto_def - base_score) / k)
