@@ -370,20 +370,26 @@ if not event_id:
         }
         
         /* ボス名とシーズン番号 */
+        .card-title-row {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin: 4px 0 6px 0;
+            min-height: 1.8rem;
+        }
         .card-season {
             color: #94a3b8;
-            font-size: 0.72rem; /* 少し小さく */
-            margin-top: 2px; /* 余白を狭める */
+            font-size: 0.72rem;
+            white-space: nowrap;
         }
         .card-boss {
             color: #f8fafc;
             font-size: 1.25rem;
             font-weight: bold;
-            margin: 2px 0 6px 0; /* 下マージンを狭める */
             line-height: 1.2;
-            min-height: 2.5rem; /* ボス名表示エリアの高さを縮小 */
-            display: flex;
-            align-items: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
         /* チナトロボーダー領域 */
@@ -530,7 +536,7 @@ if not event_id:
                 
                 status_html = f"<div style='color: #94a3b8; font-size: 0.78rem; margin-top: 10px;'>{update_status_str}</div>" if update_status_str else ""
                 
-                card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a><div><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-season">{season_num}</div><div class="card-boss">{boss_name}</div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-score">{plat_score_str_portal}</div>{time_display_html}</div></div></div>{status_html}</div>"""
+                card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a><div><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-title-row"><span class="card-season">{season_num}</span><span class="card-boss">{boss_name}</span></div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-score">{plat_score_str_portal}</div>{time_display_html}</div></div></div>{status_html}</div>"""
                 st.markdown(card_html, unsafe_allow_html=True)
     else:
         st.info("該当するシーズンが見つかりませんでした。")
