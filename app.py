@@ -1069,12 +1069,19 @@ else:
                 compress_settings = {}
                 bin_settings = {}
                 
+                import math
                 for zone in ordered_zones:
                     base_score, k = calc_params[zone]
                     auto_def = auto_defaults[zone]
                     auto_time = max(0.0, 3600 - (auto_def - base_score) / k)
                     auto_time = min(auto_time, 3600.0)
-                    compress_settings[zone] = auto_def
+                    
+                    if zone == "Lunatic":
+                        auto_time = math.ceil(auto_time / 60.0) * 60.0
+                    else:
+                        auto_time = math.ceil(auto_time)
+                        
+                    compress_settings[zone] = base_score + (3600 - auto_time) * k
                     bin_settings[zone] = int(default_time_bins[zone] * k)
                     
                 if not active_zones:
@@ -1090,6 +1097,11 @@ else:
                             auto_def = auto_defaults[zone]
                             auto_time = max(0.0, 3600 - (auto_def - base_score) / k)
                             auto_time = min(auto_time, 3600.0)
+                            
+                            if zone == "Lunatic":
+                                auto_time = math.ceil(auto_time / 60.0) * 60.0
+                            else:
+                                auto_time = math.ceil(auto_time)
                             
                             def_min = int(auto_time // 60)
                             def_sec = float(round(auto_time % 60, 3))
