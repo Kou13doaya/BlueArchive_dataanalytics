@@ -224,6 +224,22 @@ def draw_parametric_graph(df, event_id, suffix=None, draw_mode='スコア', sele
         print("[ERROR] 選択された難易度のデータはありません")
         return
 
+    # 天井の空行追加（最上位の棒が枠すれすれになるのを防ぐため、1枠分空のスペースを作る）
+    if not graph_data.empty:
+        last_row = graph_data.iloc[-1]
+        if last_row['type'] == 'detail':
+            top_diff = last_row['difficulty']
+            top_bin = dynamic_settings[top_diff]['bin']
+            next_score = last_row['sort_key'] + top_bin
+            new_row = pd.DataFrame([{
+                'label': f"{next_score:,}",
+                'count': 0,
+                'type': 'detail',
+                'sort_key': next_score,
+                'color': BAR_COLOR,
+                'difficulty': top_diff
+            }])
+            graph_data = pd.concat([graph_data, new_row], ignore_index=True)
 
     # タイム表示の場合はラベルをクリアタイムに変換
     if draw_mode == 'タイム':
