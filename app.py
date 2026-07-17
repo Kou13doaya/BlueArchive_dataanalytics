@@ -1059,17 +1059,6 @@ else:
             val = (val // 10000) * 10000
             auto_defaults[zone] = max(int(z_min), val)
 
-        # auto_defaults またはデータ取得時期(selected_suffix)が変化したときは st.number_input のセッション状態を強制リセットする
-        auto_hash_key = f"auto_defaults_hash_{event_id}_{selected_suffix}"
-        current_hash = str({z: auto_defaults[z] for z in ordered_zones})
-        if st.session_state.get(auto_hash_key) != current_hash:
-            st.session_state[auto_hash_key] = current_hash
-            for zone in ordered_zones:
-                for suffix in ["_s_compress", "_s_bin", "_t_str", "_t_bin"]:
-                    sess_key = f"{zone}{suffix}"
-                    if sess_key in st.session_state:
-                        del st.session_state[sess_key]
-
 
         with st.expander("難易度別詳細パラメータ設定", expanded=False):
             if graph_draw_mode == "タイム" and is_total_assault:
@@ -1127,7 +1116,7 @@ else:
                             time_str_input = st.text_input(
                                 "下限タイム",
                                 value=default_time_str,
-                                key=f"{zone}_t_str",
+                                key=f"{zone}_t_str_{selected_suffix}",
                                 help="例: 2:20.833 や 12:00.000"
                             )
                             
@@ -1158,7 +1147,7 @@ else:
                             
                             default_bin_sec = default_time_bins[zone]
                             step_val = 0.1 if zone in ["Torment", "Insane"] else (1.0 if default_bin_sec >= 1.0 else 0.5)
-                            time_bin = st.number_input("グラフ１本当たりの幅", min_value=0.1, max_value=120.0, value=default_bin_sec, step=step_val, key=f"{zone}_t_bin")
+                            time_bin = st.number_input("グラフ１本当たりの幅", min_value=0.1, max_value=120.0, value=default_bin_sec, step=step_val, key=f"{zone}_t_bin_{selected_suffix}")
                             bin_settings[zone] = int(time_bin * k)
 
             else:
@@ -1196,7 +1185,7 @@ else:
                                 value=int(auto_def),
                                 step=1000 if (z_max - z_min) < 100000 else 10000,
                                 help=f"範囲: {int(z_min):,} ～ {int(z_max):,}",
-                                key=f"{zone}_s_compress"
+                                key=f"{zone}_s_compress_{selected_suffix}"
                             )
                             compress_settings[zone] = comp_val
                             
@@ -1207,7 +1196,7 @@ else:
                                 max_value=1000000,
                                 value=default_bin_val,
                                 step=100 if default_bin_val < 5000 else 1000,
-                                key=f"{zone}_s_bin"
+                                key=f"{zone}_s_bin_{selected_suffix}"
                             )
                             bin_settings[zone] = bin_val
 
