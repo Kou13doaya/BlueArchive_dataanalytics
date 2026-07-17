@@ -1045,10 +1045,44 @@ else:
         for zone in ordered_zones:
             z_min, z_max = zone_ranges[zone]
             if zone == bracket_20k:
-                # 条件①: 20,000位が該当する難易度帯
-                if score_21k >= z_min:
-                    val = score_21k
+                # 条件①: 20,000位が該当する難易度帯の新しい計算方法
+                # チナトロボーダー (score_20k) - グラフ1本当たりの幅 * 6
+                
+                # デフォルトのスコア幅
+                default_score_bins = {z: 10000 for z in ordered_zones}
+                if is_total_assault:
+                    default_score_bins["Lunatic"] = 150000
+                    default_score_bins["Torment"] = 1500
+                    default_score_bins["Insane"] = 1500
+                    default_score_bins["Extreme"] = 30000
+                    default_score_bins["Hardcore"] = 30000
+                
+                # モードに応じて現在の幅(bin)を特定
+                if graph_draw_mode == "タイム" and is_total_assault:
+                    # タイムモード時のデフォルト秒数幅
+                    default_time_bins = {z: 1.0 for z in ordered_zones}
+                    default_time_bins["Lunatic"] = 60.0
+                    default_time_bins["Torment"] = 0.5
+                    default_time_bins["Insane"] = 0.5
+                    default_time_bins["Extreme"] = 10.0
+                    default_time_bins["Hardcore"] = 10.0
+                    
+                    time_bin_sec = default_time_bins.get(zone, 1.0)
+                    bin_session_key = f"{zone}_t_bin_{selected_suffix}"
+                    if bin_session_key in st.session_state:
+                        time_bin_sec = st.session_state[bin_session_key]
+                    
+                    base_score, k = calc_params[zone]
+                    current_bin = int(time_bin_sec * k)
                 else:
+                    # スコアモード時
+                    current_bin = default_score_bins.get(zone, 10000)
+                    bin_session_key = f"{zone}_s_bin_{selected_suffix}"
+                    if bin_session_key in st.session_state:
+                        current_bin = st.session_state[bin_session_key]
+                
+                val = score_20k - (current_bin * 6)
+                if val < z_min:
                     val = z_min
             else:
                 # 条件②: 該当以外は変更前のパーセンタイル計算（Lunatic: 5%, その他: 30%）
@@ -1101,6 +1135,12 @@ else:
                             st.markdown(f"**{format_bracket(zone)} 設定**")
                             base_score, k = calc_params[zone]
                             auto_def = auto_defaults[zone]
+                            
+                            default_bin_sec = default_time_bins[zone]
+                            step_val = 0.1 if zone in ["Torment", "Insane"] else (1.0 if default_bin_sec >= 1.0 else 0.5)
+                            time_bin = st.number_input("グラフ１本当たりの幅", min_value=0.1, max_value=120.0, value=default_bin_sec, step=step_val, key=f"{zone}_t_bin_{selected_suffix}")
+                            bin_settings[zone] = int(time_bin * k)
+                            
                             auto_time = max(0.0, 3600 - (auto_def - base_score) / k)
                             auto_time = min(auto_time, 3600.0)
                             
@@ -1116,7 +1156,7 @@ else:
                             time_str_input = st.text_input(
                                 "下限タイム",
                                 value=default_time_str,
-                                key=f"{zone}_t_str_{selected_suffix}",
+                                key=f"{zone}_t_str_{selected_suffix}_{time_bin}",
                                 help="例: 2:20.833 や 12:00.000"
                             )
                             
@@ -1144,11 +1184,6 @@ else:
                                     st.caption("⚠️ 正しい形式で入力してください。")
                                     
                             compress_settings[zone] = base_score + (3600 - total_sec) * k
-                            
-                            default_bin_sec = default_time_bins[zone]
-                            step_val = 0.1 if zone in ["Torment", "Insane"] else (1.0 if default_bin_sec >= 1.0 else 0.5)
-                            time_bin = st.number_input("グラフ１本当たりの幅", min_value=0.1, max_value=120.0, value=default_bin_sec, step=step_val, key=f"{zone}_t_bin_{selected_suffix}")
-                            bin_settings[zone] = int(time_bin * k)
 
             else:
                 # スコアモード（大決戦は常にこちら、総力戦もスコア選択時）
@@ -1178,16 +1213,6 @@ else:
                         
                         with cols[col_idx]:
                             st.markdown(f"**{format_bracket(zone)} 設定**")
-                            comp_val = st.number_input(
-                                "下限スコア",
-                                min_value=int(z_min),
-                                max_value=int(z_max),
-                                value=int(auto_def),
-                                step=1000 if (z_max - z_min) < 100000 else 10000,
-                                help=f"範囲: {int(z_min):,} ～ {int(z_max):,}",
-                                key=f"{zone}_s_compress_{selected_suffix}"
-                            )
-                            compress_settings[zone] = comp_val
                             
                             default_bin_val = default_score_bins.get(zone, 10000)
                             bin_val = st.number_input(
@@ -1199,6 +1224,17 @@ else:
                                 key=f"{zone}_s_bin_{selected_suffix}"
                             )
                             bin_settings[zone] = bin_val
+                            
+                            comp_val = st.number_input(
+                                "下限スコア",
+                                min_value=int(z_min),
+                                max_value=int(z_max),
+                                value=int(auto_def),
+                                step=1000 if (z_max - z_min) < 100000 else 10000,
+                                help=f"範囲: {int(z_min):,} ～ {int(z_max):,}",
+                                key=f"{zone}_s_compress_{selected_suffix}_{bin_val}"
+                            )
+                            compress_settings[zone] = comp_val
 
         # グラフ用データ: ocrのみ
         graph_df = df[df['status'] == 'ocr'] if 'status' in df.columns else df
