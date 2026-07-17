@@ -374,7 +374,7 @@ def draw_grand_assault_parametric_graph(df, event_id, suffix=None, draw_mode='ã‚
                 diff_name, t_sec = score_to_clear_time(row['sort_key'], event_id)
                 if t_sec is not None:
                     time_str = format_time_short(t_sec)
-                    new_labels.append(f"{row['difficulty']} (Low) ï½ž {time_str}")
+                    new_labels.append(f"{row['difficulty']} Low")
                 else:
                     new_labels.append(row['label'])
         graph_data['label'] = new_labels

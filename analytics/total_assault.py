@@ -107,7 +107,7 @@ def create_dynamic_histogram(df, df_target, dynamic_settings):
             continue
 
         compressed_count = len(df_target[(df_target['score'] >= compression_floor) & (df_target['score'] < compress_threshold)])
-        label_text = f"{name} (Low) ~ Gap"
+        label_text = f"{name} Low"
         combined_data.append({
             'label': label_text,
             'count': compressed_count,
@@ -256,7 +256,7 @@ def draw_parametric_graph(df, event_id, suffix=None, draw_mode='スコア', sele
                 diff_name, t_sec = score_to_clear_time(row['sort_key'], event_id)
                 if t_sec is not None:
                     time_str = format_time_short(t_sec)
-                    new_labels.append(f"{row['difficulty']} (Low) ～ {time_str}")
+                    new_labels.append(f"{row['difficulty']} Low")
                 else:
                     new_labels.append(row['label'])
         graph_data['label'] = new_labels
