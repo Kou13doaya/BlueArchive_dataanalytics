@@ -137,7 +137,6 @@ def load_cached_data(event_id, suffix=None):
     """
     return loader.load_data(event_id, suffix=suffix)
 
-@st.cache_data(show_spinner=False)
 def cached_total_assault_graph(df, event_id, draw_mode, selected_zones_tuple, compress_tuple, bin_tuple):
     return total_assault.draw_parametric_graph(
         df=df,
