@@ -14,7 +14,7 @@ if os.path.exists(parquet_path):
 
 start = time.time()
 res = subprocess.run([
-    "python", "video_ocr_parser.py", 
+    "python", "video_ocr_parser_total.py", 
     "--video", "OCR/total_assault_99.mp4", 
     "--event", "total_assault_99", 
     "--interval", "0.1", 

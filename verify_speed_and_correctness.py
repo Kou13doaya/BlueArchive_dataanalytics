@@ -19,7 +19,7 @@ def main():
     
     # 0.1秒間隔で処理を実行
     res = subprocess.run([
-        "python", "video_ocr_parser.py",
+        "python", "video_ocr_parser_total.py",
         "--video", "OCR/total_assault_99.mp4",
         "--event", "total_assault_99",
         "--interval", "0.1",
@@ -31,7 +31,7 @@ def main():
     print(f"\n[METRIC] Execution Time: {elapsed:.2f} seconds")
 
     if res.returncode != 0:
-        print("[ERROR] video_ocr_parser.py execution failed.")
+        print("[ERROR] video_ocr_parser_total.py execution failed.")
         return
 
     if not os.path.exists(target_parquet):

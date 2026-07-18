@@ -26,7 +26,6 @@ EVENT_META = {
     "grand_assault_32": {"season": "S32", "boss": "ペロロジラ", "period": "2026/04/08 ～ 2026/04/15"},
     "grand_assault_33": {"season": "S33", "boss": "クロカゲ", "period": "2026/05/13 ～ 2026/05/20"},
     "grand_assault_34": {"season": "S34", "boss": "ホバークラフト", "period": "2026/06/17 ～ 2026/06/24"},
-
 }
 
 diff_translation = {

@@ -11,32 +11,95 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 # OCRフォルダもインポート用にパス追加
-ocr_dir = os.path.join(project_root, "OCR")
-if ocr_dir not in sys.path:
-    sys.path.append(ocr_dir)
+for folder in ["OCR", os.path.join("OCR", "total_assault"), os.path.join("OCR", "grand_assault")]:
+    ocr_dir = os.path.join(project_root, folder)
+    if ocr_dir not in sys.path:
+        sys.path.append(ocr_dir)
 
-from OCR.video_ocr_parser import (
-    interactive_patch_missing_data,
-    check_and_register_season,
-    merge_dataframes,
-    parse_video_filename,
-)
 from common.event_metadata import EVENT_META, normalize_event_id
+
+
+def load_ocr_parser_module(event_id):
+    """
+    event_idに応じて対応するvideo_ocr_parserモジュールを動的にインポートします。
+    """
+    import importlib.util
+    if "grand_assault" in event_id:
+        parser_path = os.path.join(project_root, "OCR", "grand_assault", "grand_assault_video_ocr_parser.py")
+        module_name = "grand_assault_video_ocr_parser"
+    else:
+        parser_path = os.path.join(project_root, "OCR", "total_assault", "total_assault_video_ocr_parser.py")
+        module_name = "total_assault_video_ocr_parser"
+        
+    spec = importlib.util.spec_from_file_location(module_name, parser_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def run_ocr_pipeline():
     """
-    OCR/video_ocr_parser.py を実行します。
+    対象の video_ocr_parser.py を実行します。
     """
     print("\n" + "="*50)
     print(" 1. OCRの実行とデータ作成/補完")
     print("="*50)
     
-    # OCRスクリプトを実行
-    parser_path = os.path.join(project_root, "OCR", "video_ocr_parser.py")
+    video_dir = os.path.join(project_root, "video")
+    if not os.path.exists(video_dir):
+        print(f"[ERROR] 動画ディレクトリが見つかりません: {video_dir}")
+        return
+
+    all_videos = [f for f in os.listdir(video_dir) if f.lower().endswith(".mp4")]
+    
+    # 正しい命名ルールにマッチする動画を抽出
+    pattern = r"^(?P<type>[TG])(?P<season>\d+)_(?:(?P<date>\d{8})_(?P<time>\d{4})|(?P<last>last))(?:_(?P<dup>\d+))?$"
+    valid_videos = []
+    for v in all_videos:
+        basename = os.path.splitext(v)[0]
+        match = re.match(pattern, basename)
+        if match:
+            valid_videos.append((v, match.group("type")))
+            
+    if not valid_videos:
+        print("[ERROR] video フォルダ内に正しい形式（例: T/Gシーズン_年月日_日時 または last）の動画が見つかりませんでした。")
+        return
+
+    print("OCRにかける動画を選択してください:")
+    for idx, (name, vtype) in enumerate(valid_videos, 1):
+        type_desc = "総力戦 (T)" if vtype == "T" else "大決戦 (G)"
+        print(f"{idx}: {name} ({type_desc})")
+    print("")
+
+    while True:
+        choice = input(f"番号を選択してください (1-{len(valid_videos)}, 終了は Enter): ").strip()
+        if not choice:
+            print("[INFO] キャンセルしました。")
+            return
+        try:
+            choice_idx = int(choice) - 1
+            if 0 <= choice_idx < len(valid_videos):
+                selected_video_name, vtype = valid_videos[choice_idx]
+                break
+            else:
+                print(f"1 から {len(valid_videos)} の範囲で入力してください。")
+        except ValueError:
+            print("有効な数値を入力してください。")
+
+    # Tなら総力戦、Gなら大決戦のパーサーを選択
+    if vtype == 'T':
+        parser_path = os.path.join(project_root, "OCR", "total_assault", "total_assault_video_ocr_parser.py")
+    elif vtype == 'G':
+        parser_path = os.path.join(project_root, "OCR", "grand_assault", "grand_assault_video_ocr_parser.py")
+    else:
+        print("[ERROR] 不明な動画タイプです。")
+        return
+
     try:
         # スレッドや対話型プロンプトが正しく動作するように現在のプロセスと同じ標準入出力で起動
-        subprocess.run([sys.executable, parser_path], check=True)
+        video_full_path = os.path.join(video_dir, selected_video_name)
+        subprocess.run([sys.executable, parser_path, "--video", video_full_path], check=True)
     except subprocess.CalledProcessError as e:
         print(f"[ERROR] OCR実行中にエラーが発生しました: {e}")
         return
@@ -60,7 +123,7 @@ def merge_ocr_results():
     print("="*50)
 
     data_dir = os.path.join(project_root, "rank_data")
-    video_dir = os.path.join(project_root, "OCR", "video")
+    video_dir = os.path.join(project_root, "video")
 
     if not os.path.exists(data_dir):
         print(f"[ERROR] データディレクトリが見つかりません: {data_dir}")
@@ -104,16 +167,17 @@ def merge_ocr_results():
     # 動画フォルダが存在する場合のみ候補を表示
     candidate_videos = []
     if vid_prefix and os.path.exists(video_dir):
+        ocr_mod = load_ocr_parser_module(event_id_from_parquet)
         all_videos = [f for f in os.listdir(video_dir) if f.lower().endswith(".mp4")]
         for v in all_videos:
-            ev_id = parse_video_filename(os.path.join(video_dir, v))
+            ev_id = ocr_mod.parse_video_filename(os.path.join(video_dir, v))
             if ev_id == event_id_from_parquet:
                 candidate_videos.append((v, os.path.join(video_dir, v)))
         candidate_videos.sort(key=lambda x: x[0])
 
     if not candidate_videos:
-        print(f"[INFO] OCR/video/ 内に '{vid_prefix}*' に一致する動画ファイルが見つかりませんでした。")
-        print("       動画ファイルを OCR/video/ フォルダに配置してから再試行してください。")
+        print(f"[INFO] video/ 内に '{vid_prefix}*' に一致する動画ファイルが見つかりませんでした。")
+        print("       動画ファイルを video/ フォルダに配置してから再試行してください。")
         return
 
     print(f"\n以下の動画が '{base_file}' に統合できる候補として見つかりました:")
@@ -150,24 +214,14 @@ def merge_ocr_results():
         df_base['score'] = df_base['score'].astype(pd.Int32Dtype())
 
     # 各動画を OCR してマージ
-    parser_path = os.path.join(project_root, "OCR", "video_ocr_parser.py")
+    ocr_mod = load_ocr_parser_module(event_id_from_parquet)
     for name, vid_path in selected_videos:
         print(f"\n{'='*50}")
         print(f"[INFO] OCR 実行中: {name}")
         print(f"{'='*50}")
 
-        # video_ocr_parser.py を subprocess 実行（統合フラグを渡す）
-        # ただし process_and_save の既存ファイル上書き挙動を避けるため
-        # ここでは VideoOCRParser を直接インポートして利用する
         try:
-            # 動的インポート（subprocess 回避）
-            import importlib.util
-            spec = importlib.util.spec_from_file_location("video_ocr_parser", parser_path)
-            vop_module = importlib.util.load_module_from_spec(spec) if hasattr(importlib.util, 'load_module_from_spec') else None
-
-            # 標準 import に切り替え
-            from OCR.video_ocr_parser import VideoOCRParser
-            parser = VideoOCRParser(data_dir=data_dir)
+            parser = ocr_mod.VideoOCRParser(data_dir=data_dir)
 
             rows = parser.parse_video(vid_path, sample_interval_sec=0.1)
             if not rows:
@@ -186,7 +240,7 @@ def merge_ocr_results():
                 df_new['score'] = df_new['score'].astype(_pd.Int32Dtype())
 
             print(f"[INFO] {name} の OCR 完了 ({len(df_new)} 件)。ベースデータと統合します...")
-            df_base = merge_dataframes(df_base, df_new)
+            df_base = ocr_mod.merge_dataframes(df_base, df_new)
 
         except Exception as e:
             print(f"[ERROR] {name} の OCR 中にエラーが発生しました: {e}")
@@ -194,7 +248,7 @@ def merge_ocr_results():
             continue
 
     # 欠損補完
-    df_base = interactive_patch_missing_data(df_base)
+    df_base = ocr_mod.interactive_patch_missing_data(df_base)
 
     # 上書き保存
     df_base.to_parquet(base_path, compression='zstd')
@@ -259,7 +313,9 @@ def patch_existing_data():
             df['score'] = df['score'].astype(pd.Int32Dtype())
             
         # 対話型で補完
-        df_patched = interactive_patch_missing_data(df)
+        event_id = re.sub(r'^rank_data_', '', re.sub(r'\.parquet$', '', selected_file))
+        ocr_mod = load_ocr_parser_module(event_id)
+        df_patched = ocr_mod.interactive_patch_missing_data(df)
         
         # 保存
         df_patched.to_parquet(file_path, compression='zstd')
