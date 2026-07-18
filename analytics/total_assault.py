@@ -70,10 +70,10 @@ def create_dynamic_histogram(df, df_target, dynamic_settings):
         # 1. Detailed Zone
         detail_df = df_target[(df_target['score'] >= compress_threshold) & (df_target['score'] < current_ceiling)].copy()
         if current_ceiling > compress_threshold:
-            # ビン数の安全チェック（150個以上に増えすぎないよう自動スケーリング）
+            # ビン数の安全チェック（80個以上に増えすぎないよう自動スケーリング）
             estimated_bins = (current_ceiling - compress_threshold) / bin_size
-            if estimated_bins > 150:
-                bin_size = int(np.ceil((current_ceiling - compress_threshold) / 150))
+            if estimated_bins > 80:
+                bin_size = int(np.ceil((current_ceiling - compress_threshold) / 80))
                 
             # 実データの最大スコアを基準にグリッド上限を決定する（はみ出しによる空バー防止）
             actual_max = detail_df['score'].max() if not detail_df.empty else compress_threshold

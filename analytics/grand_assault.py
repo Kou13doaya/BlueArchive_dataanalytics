@@ -54,10 +54,10 @@ def create_single_block_histogram(df_target, settings, block_name):
     detail_df = block_df[block_df['score'] >= comp_below].copy()
     if not detail_df.empty:
         actual_max = detail_df['score'].max()
-        # ビン数の安全チェック（150個以上に増えすぎないよう自動スケーリング）
+        # ビン数の安全チェック（80個以上に増えすぎないよう自動スケーリング）
         estimated_bins = (actual_max - comp_below) / bin_size
-        if estimated_bins > 150:
-            bin_size = int(np.ceil((actual_max - comp_below) / 150))
+        if estimated_bins > 80:
+            bin_size = int(np.ceil((actual_max - comp_below) / 80))
             
         grid_min = comp_below
         grid_max = (actual_max // bin_size) * bin_size
