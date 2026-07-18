@@ -54,10 +54,10 @@ def create_single_block_histogram(df_target, settings, block_name):
     detail_df = block_df[block_df['score'] >= comp_below].copy()
     if not detail_df.empty:
         actual_max = detail_df['score'].max()
-        # ビン数の安全チェック（80個以上に増えすぎないよう自動スケーリング）
+        # ビン数の安全チェック（300個以上に増えすぎないよう自動スケーリング）
         estimated_bins = (actual_max - comp_below) / bin_size
-        if estimated_bins > 80:
-            bin_size = int(np.ceil((actual_max - comp_below) / 80))
+        if estimated_bins > 300:
+            bin_size = int(np.ceil((actual_max - comp_below) / 300))
             
         grid_min = comp_below
         grid_max = (actual_max // bin_size) * bin_size
@@ -147,7 +147,20 @@ def draw_grand_assault_graph(df, event_id=None, suffix=None, view_mode='High', s
     plot_counts.loc[mask_comp] = plot_counts.loc[mask_comp].clip(upper=clip_limit)
 
     num_bars = len(graph_data)
-    height_per_data = 0.22
+    
+    # 本数に応じて動的に表示サイズを決定する
+    if num_bars <= 80:
+        BAR_HEIGHT = 0.6
+        height_per_data = 0.22
+        font_size_label = 10
+        font_size_ytick = 10
+    else:
+        ratio = max(0.0, min(1.0, (num_bars - 80) / 220)) # 80〜300の比率
+        BAR_HEIGHT = 0.6 - (ratio * 0.2)        # 0.6 -> 0.4
+        height_per_data = 0.22 - (ratio * 0.08)  # 0.22 -> 0.14
+        font_size_label = max(6.5, 10.0 - (ratio * 3.5))
+        font_size_ytick = max(6.5, 10.0 - (ratio * 3.5))
+
     fig_height = (num_bars * height_per_data) + 2
 
     # 非GUI環境用の設定
@@ -159,11 +172,11 @@ def draw_grand_assault_graph(df, event_id=None, suffix=None, view_mode='High', s
     y_pos_grid = np.arange(num_bars)
     y_pos_bar = y_pos_grid + 0.5
 
-    ax.barh(y_pos_bar, plot_counts, color=graph_data['color'], edgecolor='gray', linewidth=0.3, height=0.6, alpha=1.0)
+    ax.barh(y_pos_bar, plot_counts, color=graph_data['color'], edgecolor='gray', linewidth=0.3, height=BAR_HEIGHT, alpha=1.0)
 
     ax.grid(axis='y', color=GRID_COLOR, linestyle='-', linewidth=0.5, alpha=0.8)
     ax.set_yticks(y_pos_grid)
-    ax.set_yticklabels(graph_data['label'])
+    ax.set_yticklabels(graph_data['label'], fontsize=font_size_ytick)
     ax.grid(axis='x', linestyle='-', color='gray', alpha=0.3, linewidth=0.8)
     ax.axhline(y=num_bars, color=GRID_COLOR, linestyle='-', linewidth=0.5, alpha=0.8)
     ax.set_axisbelow(True)
@@ -175,9 +188,9 @@ def draw_grand_assault_graph(df, event_id=None, suffix=None, view_mode='High', s
         bar_y = y_pos_bar[i]
         if count > 0:
             font_w = 'bold' if row['type'] == 'compressed' else 'normal'
-            ax.text(plot_val + (clip_limit * 0.01), bar_y, f"{int(count):,}", va='center', color=TEXT_COLOR, fontsize=10, fontweight=font_w)
+            ax.text(plot_val + (clip_limit * 0.01), bar_y, f"{int(count):,}", va='center', color=TEXT_COLOR, fontsize=font_size_label, fontweight=font_w)
         elif row['type'] == 'compressed':
-             ax.text(clip_limit * 0.01, bar_y, "Gap", va='center', color='gray', fontsize=9, fontstyle='italic')
+             ax.text(clip_limit * 0.01, bar_y, "Gap", va='center', color='gray', fontsize=font_size_label - 1, fontstyle='italic')
 
     # ボーダーライン
     sorted_df_all = df.sort_values('score', ascending=False).reset_index(drop=True)

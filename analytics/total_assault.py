@@ -70,10 +70,10 @@ def create_dynamic_histogram(df, df_target, dynamic_settings):
         # 1. Detailed Zone
         detail_df = df_target[(df_target['score'] >= compress_threshold) & (df_target['score'] < current_ceiling)].copy()
         if current_ceiling > compress_threshold:
-            # ビン数の安全チェック（80個以上に増えすぎないよう自動スケーリング）
+            # ビン数の安全チェック（300個以上に増えすぎないよう自動スケーリング）
             estimated_bins = (current_ceiling - compress_threshold) / bin_size
-            if estimated_bins > 80:
-                bin_size = int(np.ceil((current_ceiling - compress_threshold) / 80))
+            if estimated_bins > 300:
+                bin_size = int(np.ceil((current_ceiling - compress_threshold) / 300))
                 
             # 実データの最大スコアを基準にグリッド上限を決定する（はみ出しによる空バー防止）
             actual_max = detail_df['score'].max() if not detail_df.empty else compress_threshold
@@ -286,8 +286,20 @@ def draw_parametric_graph(df, event_id, suffix=None, draw_mode='スコア', sele
     plot_counts.loc[mask_comp] = plot_counts.loc[mask_comp].clip(upper=clip_limit)
 
     num_bars = len(graph_data)
-    BAR_HEIGHT = 0.6
-    height_per_data = 0.22
+    
+    # 本数に応じて動的に表示サイズを決定する
+    if num_bars <= 80:
+        BAR_HEIGHT = 0.6
+        height_per_data = 0.22
+        font_size_label = 10
+        font_size_ytick = 10
+    else:
+        ratio = max(0.0, min(1.0, (num_bars - 80) / 220)) # 80〜300の比率
+        BAR_HEIGHT = 0.6 - (ratio * 0.2)        # 0.6 -> 0.4
+        height_per_data = 0.22 - (ratio * 0.08)  # 0.22 -> 0.14
+        font_size_label = max(6.5, 10.0 - (ratio * 3.5))
+        font_size_ytick = max(6.5, 10.0 - (ratio * 3.5))
+
     fig_height = (num_bars * height_per_data) + 2
 
     # 非GUI環境用の設定
@@ -313,7 +325,7 @@ def draw_parametric_graph(df, event_id, suffix=None, draw_mode='スコア', sele
     # グリッド & 天井線
     ax.grid(axis='y', color=GRID_COLOR, linestyle='-', linewidth=0.5, alpha=0.8)
     ax.set_yticks(y_pos_grid)
-    ax.set_yticklabels(graph_data['label'])
+    ax.set_yticklabels(graph_data['label'], fontsize=font_size_ytick)
     ax.grid(axis='x', linestyle='-', color='gray', alpha=0.3, linewidth=0.8)
     ax.axhline(y=num_bars, color=GRID_COLOR, linestyle='-', linewidth=0.5, alpha=0.8)
     ax.set_axisbelow(True)
@@ -332,11 +344,11 @@ def draw_parametric_graph(df, event_id, suffix=None, draw_mode='スコア', sele
                 f"{int(count):,}",
                 va='center',
                 color=TEXT_COLOR,
-                fontsize=10,
+                fontsize=font_size_label,
                 fontweight=font_w
             )
         elif row['type'] == 'compressed':
-             ax.text(clip_limit * 0.01, bar_y, "Gap", va='center', color='gray', fontsize=9, fontstyle='italic')
+             ax.text(clip_limit * 0.01, bar_y, "Gap", va='center', color='gray', fontsize=font_size_label - 1, fontstyle='italic')
 
     # ボーダーライン (描画範囲内にある場合のみ表示)
     def get_exact_y_pos(target_score):
