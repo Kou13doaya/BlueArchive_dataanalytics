@@ -100,9 +100,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="main-title">Blue Archive Data Analytics</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">総力戦・大決戦データ分析ツール (Preview4)</div>', unsafe_allow_html=True)
-
 # ----------------------------------------------------
 # ユーティリティ関数のインポート
 # ----------------------------------------------------
@@ -129,6 +126,9 @@ def get_base64_image(image_path):
     return ""
 
 platinum_base64 = get_base64_image("image/platinum.png")
+indoor_base64 = get_base64_image("image/indoor.png")
+outdoor_base64 = get_base64_image("image/outdoor.png")
+urban_base64 = get_base64_image("image/urban.png")
 
 @st.cache_data
 def load_cached_data(event_id, suffix=None):
@@ -294,6 +294,8 @@ else:
 # メイン表示エリア (ポータル画面 または 詳細ダッシュボード)
 # ----------------------------------------------------
 if not event_id:
+    st.markdown('<div class="main-title">Blue Archive Data Analytics</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">総力戦・大決戦データ分析ツール (Preview4)</div>', unsafe_allow_html=True)
     # ====================================================
     # A. ポータル画面: 総力戦・大決戦ポータル
     # ====================================================
@@ -320,7 +322,7 @@ if not event_id:
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            min-height: 205px; /* 縦幅を少しコンパクトに */
+            min-height: 145px; /* 縦幅をコンパクトにして余白を詰める */
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
             transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
             height: 100%;
@@ -371,8 +373,8 @@ if not event_id:
         /* ボス名とシーズン番号 */
         .card-title-row {
             display: flex;
-            align-items: baseline;
-            gap: 8px;
+            justify-content: space-between;
+            align-items: center;
             margin: 4px 0 6px 0;
             min-height: 1.8rem;
         }
@@ -464,7 +466,7 @@ if not event_id:
         meta = EVENT_META.get(normalize_event_id(eid), {})
         period = meta.get("period", "")
         if period:
-            start_date_str = period.split(" ～ ")[0].strip()
+            start_date_str = period.split(" ~ ")[0].strip()
             try:
                 return datetime.strptime(start_date_str, "%Y/%m/%d")
             except Exception:
@@ -513,7 +515,7 @@ if not event_id:
             
             total_players, plat_score_portal, plat_time_str = get_portal_card_stats(eid, suffix=latest_suffix)
                 
-            plat_score_str_portal = f"{int(plat_score_portal):,}" if plat_score_portal is not None else "データ不足"
+            plat_score_str_portal = f"{int(plat_score_portal):,}" if plat_score_portal is not None else "ー"
 
             # 最終更新情報表示用の文字列を作成
             if latest_suffix == "last":
@@ -531,11 +533,45 @@ if not event_id:
                 badge_color = "#3b82f6" if is_total else "#10b981"
                 type_label = "総力戦" if is_total else "大決戦"
                 
-                time_display_html = f"<div class='card-border-time'>{plat_time_str}</div>" if plat_time_str else "<div class='card-border-time-placeholder'></div>"
+                field_val = meta.get("field", "")
+                if field_val == "屋内":
+                    field_img_base64 = indoor_base64
+                elif field_val == "屋外":
+                    field_img_base64 = outdoor_base64
+                elif field_val == "市街地":
+                    field_img_base64 = urban_base64
+                else:
+                    field_img_base64 = ""
                 
-                status_html = f"<div style='color: #94a3b8; font-size: 0.78rem; margin-top: 10px;'>{update_status_str}</div>" if update_status_str else ""
+                if field_img_base64:
+                    field_img_html = f'<img src="data:image/png;base64,{field_img_base64}" style="width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; margin-left: 4px;" title="{field_val}" />'
+                else:
+                    field_img_html = ''
                 
-                card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a><div><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-title-row"><span class="card-season">{season_num}</span><span class="card-boss">{boss_name}</span></div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-score">{plat_score_str_portal}</div>{time_display_html}</div></div></div>{status_html}</div>"""
+                # ボス選択画面用の装甲バッジ（「対象装甲:」の文字は不要）
+                armors = meta.get("armors", [])
+                armor_badges_html = ""
+                if not is_total and armors:
+                    armor_badges_html = '<div style="display: flex; gap: 4px; margin-top: 3px; flex-wrap: wrap;">'
+                    for a in armors:
+                        color = "#a855f7" # 弾力装甲
+                        if a == "軽装備":
+                            color = "#ef4444"
+                        elif a == "重装甲":
+                            color = "#eab308"
+                        elif a == "特殊装甲":
+                            color = "#3b82f6"
+                        armor_badges_html += f'<span style="background-color: {color}; color: white; padding: 1px 5px; border-radius: 3px; font-size: 0.65rem; font-weight: bold; white-space: nowrap;">{a}</span>'
+                    armor_badges_html += '</div>'
+                
+                if is_total:
+                    info_bottom_html = f"<div class='card-border-time'>{plat_time_str}</div>" if plat_time_str else "<div class='card-border-time-placeholder'></div>"
+                else:
+                    info_bottom_html = armor_badges_html if armor_badges_html else "<div class='card-border-time-placeholder'></div>"
+                
+                status_html = f"<div style='color: #94a3b8; font-size: 0.72rem; margin-top: 5px;'>{update_status_str}</div>" if update_status_str else ""
+                
+                card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a><div><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-title-row"><div style="display: flex; align-items: baseline; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="card-season">{season_num}</span><span class="card-boss">{boss_name}</span></div>{field_img_html}</div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-score">{plat_score_str_portal}</div>{info_bottom_html}</div></div>{status_html}</div></div>"""
                 st.markdown(card_html, unsafe_allow_html=True)
     else:
         st.info("該当するシーズンが見つかりませんでした。")
@@ -549,7 +585,59 @@ else:
         st.stop()
         
     # 選択イベントのタイトル表示
-    st.subheader(get_display_name(event_id))
+    meta = EVENT_META.get(normalize_event_id(event_id), {})
+    season_num = meta.get("season", "")
+    period = meta.get("period", "")
+    boss_name = meta.get("boss", "")
+    field_val = meta.get("field", "")
+    armors = meta.get("armors", [])
+    
+    if field_val == "屋内":
+        field_img_base64 = indoor_base64
+    elif field_val == "屋外":
+        field_img_base64 = outdoor_base64
+    elif field_val == "市街地":
+        field_img_base64 = urban_base64
+    else:
+        field_img_base64 = ""
+        
+    if field_img_base64:
+        field_img_html = f'<img src="data:image/png;base64,{field_img_base64}" style="width: 24px; height: 24px; object-fit: contain; vertical-align: middle;" title="{field_val}" />'
+    else:
+        field_img_html = ''
+        
+    armor_html = ""
+    if armors:
+        armor_html = '<div style="display: flex; gap: 6px; margin-top: 8px; align-items: center;">'
+        torment_armors = meta.get("torment_armors", [])
+        for a in armors:
+            color = "#a855f7" # 弾力装甲 (振動)
+            if a == "軽装備":
+                color = "#ef4444"
+            elif a == "重装甲":
+                color = "#eab308"
+            elif a == "特殊装甲":
+                color = "#3b82f6"
+            
+            # Torment解放対象の装甲には " (Torment)" を付与
+            label = a
+            if a in torment_armors:
+                label += " (Torment)"
+                
+            armor_html += f'<span style="background-color: {color}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">{label}</span>'
+        armor_html += '</div>'
+        
+    title_html = f"""
+    <div style="margin-bottom: 20px;">
+        <div style="font-size: 0.95rem; color: #94a3b8; font-weight: normal; margin-bottom: 4px;">{season_num} {period}</div>
+        <div style="font-size: 1.75rem; font-weight: bold; color: #f8fafc; display: flex; align-items: center; gap: 15px;">
+            <span>{boss_name}</span>
+            {field_img_html}
+        </div>
+        {armor_html}
+    </div>
+    """
+    st.markdown(title_html, unsafe_allow_html=True)
     
     # 各種ボーダースコアの事前計算
     # 各ボーダー：ocr、boundaryで該当のrankに位置するもの
@@ -566,9 +654,9 @@ else:
     gold_score = get_border_score(120000)
     silver_score = get_border_score(240000)
     
-    plat_score_str = f"{int(plat_score):,}" if (plat_score is not None and not pd.isna(plat_score)) else "データ不足"
-    gold_score_str = f"{int(gold_score):,}" if (gold_score is not None and not pd.isna(gold_score)) else "データ不足"
-    silver_score_str = f"{int(silver_score):,}" if (silver_score is not None and not pd.isna(silver_score)) else "データ不足"
+    plat_score_str = f"{int(plat_score):,}" if (plat_score is not None and not pd.isna(plat_score)) else "ー"
+    gold_score_str = f"{int(gold_score):,}" if (gold_score is not None and not pd.isna(gold_score)) else "ー"
+    silver_score_str = f"{int(silver_score):,}" if (silver_score is not None and not pd.isna(silver_score)) else "ー"
 
     # 総参加者数の取得
     total_participants = None
@@ -637,14 +725,14 @@ else:
         if not total_rows.empty:
             total_participants = total_rows.index.max()
 
-    participants_str = f"{total_participants:,} 人" if total_participants is not None else "データ不足"
+    participants_str = f"{total_participants:,} 人" if total_participants is not None else "ー"
     st.markdown(
-        f"<h3 style='text-align: center; font-weight: bold; margin-top: 10px;'>"
+        f"<h3 style='text-align: center; font-weight: bold; margin-top: 0px; margin-bottom: 0px; padding: 0; line-height: 1.1;'>"
         f"総参加者数 {participants_str}"
         f"</h3>",
         unsafe_allow_html=True
     )
-    st.markdown("---")
+    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
 
     # ====================================================
     # 3. クリア状況サマリー・プレイヤー検索 (上から3番目 - 折りたたみ)
@@ -661,10 +749,10 @@ else:
         # 統合検索文字列の入力 (プレースホルダーに情報を集約)
         if app_mode.startswith("総力戦"):
             search_label = "順位・スコア・タイム検索"
-            search_placeholder = "順位、スコア、またはタイムを入力してください (例: 20000, 31076000, 2:17.833, Torment 2:15.000)"
+            search_placeholder = "順位、スコア、またはタイムを入力 (例: 20000, 31076000, 2:17.833, Torment 2:15.000)"
         else:
             search_label = "順位・スコア検索"
-            search_placeholder = "順位、またはスコアを入力してください (例: 20000, 104800000)"
+            search_placeholder = "順位、またはスコアを入力 (例: 20000, 104800000)"
 
         search_query = st.text_input(
             search_label,
@@ -692,7 +780,7 @@ else:
                     
             if is_time:
                 if not app_mode.startswith("総力戦"):
-                    st.warning("⚠️ 大決戦ではクリアタイムでの検索は行えません。順位またはスコアを入力してください。")
+                    st.warning("⚠️ 大決戦ではクリアタイムでの検索は行えません。順位またはスコアを入力。")
                 else:
                     detected_diff = None
                     for kw in difficulty_keywords:
@@ -754,18 +842,38 @@ else:
                                     matched_score_val = matched_row['score']
                                     act_diff, act_t_sec = score_to_clear_time(matched_score_val, event_id)
                                     
+                                    label_suffix = f" ({diff_candidate})" if not detected_diff else ""
+                                    
                                     if not detected_diff:
                                         if act_diff == diff_candidate:
+                                            # 1. 理論値 (タイム -> スコア)
                                             target_records.append({
-                                                "順位": f"{int(act_rank):,} 位",
+                                                "順位": f"入力タイム{label_suffix}",
+                                                "クリア難易度": diff_candidate,
+                                                "スコア": f"{int(est_score):,}",
+                                                "クリアタイム": format_time_short(total_seconds),
+                                                "sort_key": int(act_rank) - 2
+                                            })
+                                            # 2. 最寄りプレイヤーの実績値
+                                            target_records.append({
+                                                "順位": f"{int(act_rank):,} 位 (最寄)",
                                                 "クリア難易度": act_diff,
                                                 "スコア": f"{int(matched_score_val):,}",
                                                 "クリアタイム": format_time_short(act_t_sec),
                                                 "sort_key": int(act_rank) - 1
                                             })
                                     else:
+                                        # 1. 理論値 (タイム -> スコア)
                                         target_records.append({
-                                            "順位": f"{int(act_rank):,} 位",
+                                            "順位": f"入力タイム{label_suffix}",
+                                            "クリア難易度": diff_candidate,
+                                            "スコア": f"{int(est_score):,}",
+                                            "クリアタイム": format_time_short(total_seconds),
+                                            "sort_key": int(act_rank) - 2
+                                        })
+                                        # 2. 最寄りプレイヤーの実績値
+                                        target_records.append({
+                                            "順位": f"{int(act_rank):,} 位 (最寄)",
                                             "クリア難易度": act_diff,
                                             "スコア": f"{int(matched_score_val):,}",
                                             "クリアタイム": format_time_short(act_t_sec),
@@ -781,8 +889,18 @@ else:
                                     matched_row = df.loc[act_rank]
                                     matched_score_val = matched_row['score']
                                     act_diff, act_t_sec = score_to_clear_time(matched_score_val, event_id)
+                                    
+                                    # 1. 理論値
                                     target_records.append({
-                                        "順位": f"{int(act_rank):,} 位",
+                                        "順位": f"入力タイム ({diff_candidate})",
+                                        "クリア難易度": diff_candidate,
+                                        "スコア": f"{int(est_score):,}",
+                                        "クリアタイム": format_time_short(total_seconds),
+                                        "sort_key": int(act_rank) - 2
+                                    })
+                                    # 2. 実績値
+                                    target_records.append({
+                                        "順位": f"{int(act_rank):,} 位 (最寄)",
                                         "クリア難易度": act_diff,
                                         "スコア": f"{int(matched_score_val):,}",
                                         "クリアタイム": format_time_short(act_t_sec),
@@ -802,43 +920,66 @@ else:
                             if pd.isna(matched_score_val) or matched_score_val is pd.NA:
                                 rec = {
                                     "順位": f"{val:,} 位",
-                                    "スコア": "欠損",
+                                    "スコア": "ー",
                                     "sort_key": val - 1
                                 }
                                 if app_mode.startswith("総力戦"):
                                     rec["クリア難易度"] = "不明"
                                     rec["クリアタイム"] = "不明"
+                                else:
+                                    rec["クリア難易度"] = "不明"
                             else:
                                 rec = {
                                     "順位": f"{val:,} 位",
                                     "スコア": f"{int(matched_score_val):,}",
                                     "sort_key": val - 1
                                 }
-                                if app_mode.startswith("総力戦"):
-                                    diff, t_sec = score_to_clear_time(matched_score_val, event_id)
+                                diff, t_sec = score_to_clear_time(matched_score_val, event_id)
+                                if diff != "Unknown":
                                     rec["クリア難易度"] = diff
-                                    rec["クリアタイム"] = format_time_short(t_sec)
+                                    if t_sec is not None:
+                                        rec["クリアタイム"] = format_time_short(t_sec)
                             target_records.append(rec)
                     else:
+                        # 1. 入力スコアそのものの逆算結果 (計算機として動作)
+                        input_rec = {
+                            "順位": "入力スコア",
+                            "スコア": f"{int(val):,}",
+                            "sort_key": -1 # 最上部に配置
+                        }
+                        diff_input, t_sec_input = score_to_clear_time(val, event_id)
+                        if diff_input != "Unknown":
+                            input_rec["クリア難易度"] = diff_input
+                            if t_sec_input is not None:
+                                input_rec["クリアタイム"] = format_time_short(t_sec_input)
+                            else:
+                                input_rec["クリアタイム"] = "N/A"
+                        else:
+                            input_rec["クリア難易度"] = "不明"
+                            input_rec["クリアタイム"] = "N/A"
+                        target_records.append(input_rec)
+
+                        # 2. 最も近い順位の実際のプレイヤー
                         act_rank, act_score = find_nearest_player(sorted_search_df, val)
                         if act_rank in df.index:
                             matched_row = df.loc[act_rank]
                             matched_score_val = matched_row['score']
                             rec = {
-                                "順位": f"{int(act_rank):,} 位",
+                                "順位": f"{int(act_rank):,} 位 (最寄)",
                                 "スコア": f"{int(matched_score_val):,}",
-                                "sort_key": int(act_rank) - 1
+                                "sort_key": int(act_rank)
                             }
-                            if app_mode.startswith("総力戦"):
-                                diff, t_sec = score_to_clear_time(matched_score_val, event_id)
+                            diff, t_sec = score_to_clear_time(matched_score_val, event_id)
+                            if diff != "Unknown":
                                 rec["クリア難易度"] = diff
-                                rec["クリアタイム"] = format_time_short(t_sec)
+                                if t_sec is not None:
+                                    rec["クリアタイム"] = format_time_short(t_sec)
                             target_records.append(rec)
                 else:
                     if app_mode.startswith("総力戦"):
-                        st.error("⚠️ 入力された形式を理解できませんでした。順位、スコア、またはタイムを入力してください。")
+                        st.error("⚠️ 入力された形式を理解できませんでした。順位、スコア、またはタイムを入力。")
                     else:
-                        st.error("⚠️ 入力された形式を理解できませんでした。順位、またはスコアを入力してください。")
+                        st.error("⚠️ 入力された形式を理解できませんでした。順位、またはスコアを入力。")
             
             if target_records:
                 display_df = pd.DataFrame(target_records)
@@ -1230,7 +1371,7 @@ else:
                                 max_value=int(z_max),
                                 value=int(auto_def),
                                 step=1000 if (z_max - z_min) < 100000 else 10000,
-                                help=f"範囲: {int(z_min):,} ～ {int(z_max):,}",
+                                help=f"範囲: {int(z_min):,} ~ {int(z_max):,}",
                                 key=f"{zone}_s_compress_{selected_suffix}_{bin_val}"
                             )
                             compress_settings[zone] = comp_val
