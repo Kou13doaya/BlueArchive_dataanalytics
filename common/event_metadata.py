@@ -26,7 +26,7 @@ EVENT_META = {
     "grand_assault_32": {"season": "S32", "boss": "ペロロジラ", "period": "2026/04/08 ~ 2026/04/15", "field": "屋外", "armors": ["重装甲", "特殊装甲", "弾力装甲"], "torment_armors": ["重装甲", "特殊装甲"]},
     "grand_assault_33": {"season": "S33", "boss": "クロカゲ", "period": "2026/05/13 ~ 2026/05/20", "field": "市街地", "armors": ["軽装備", "弾力装甲", "特殊装甲"], "torment_armors": ["軽装備", "特殊装甲"]},
     "grand_assault_34": {"season": "S34", "boss": "ホバークラフト", "period": "2026/06/17 ~ 2026/06/24", "field": "屋外", "armors": ["軽装備", "特殊装甲", "弾力装甲"], "torment_armors": ["特殊装甲", "弾力装甲"]},
-    "grand_assault_35": {"season": "S35", "boss": "ホド", "period": "2026/07/15 ～ 2026/07/22", "field": "屋内", "armors": ["重装甲", "弾力装甲", "軽装備"], "torment_armors": ["重装甲", "弾力装甲"]},
+    "grand_assault_35": {"season": "S35", "boss": "ホド", "period": "2026/07/15 ~ 2026/07/22", "field": "屋内", "armors": ["重装甲", "弾力装甲", "軽装備"], "torment_armors": ["重装甲", "弾力装甲"]},
 }
 
 diff_translation = {

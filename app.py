@@ -466,11 +466,13 @@ if not event_id:
         meta = EVENT_META.get(normalize_event_id(eid), {})
         period = meta.get("period", "")
         if period:
-            start_date_str = period.split(" ~ ")[0].strip()
-            try:
-                return datetime.strptime(start_date_str, "%Y/%m/%d")
-            except Exception:
-                pass
+            parts = re.split(r'\s*[~～]\s*', period)
+            if parts:
+                start_date_str = parts[0].strip()
+                try:
+                    return datetime.strptime(start_date_str, "%Y/%m/%d")
+                except Exception:
+                    pass
         return datetime.min
         
     sorted_events = sorted(available_events, key=get_event_start_date, reverse=True)
