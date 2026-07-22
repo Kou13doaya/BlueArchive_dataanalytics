@@ -120,7 +120,7 @@ def interactive_patch_missing_data(df_save):
             
         print("\n補完モードを選択してください:")
         print("1: 1件ずつ対話入力（前後のスコア目安を表示）")
-        print("2: ま了て入力（'順位 スコア' の形式で複数行を貼り付け）")
+        print("2: まとめて入力（'順位 スコア' の形式で複数行を貼り付け）")
         mode = input("選択してください (1 or 2, 終了は Enter): ").strip()
         
         if mode == '1':
