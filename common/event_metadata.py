@@ -102,6 +102,7 @@ def register_new_event(event_id, season, boss, period, field="", armors=None, to
     """
     event_metadata.py の EVENT_META に新しいイベントメタデータを追加します。
     """
+    period = re.sub(r'\s*[~～〜]\s*', ' ~ ', period).strip()
     import os
     file_path = os.path.abspath(__file__)
     with open(file_path, "r", encoding="utf-8") as f:

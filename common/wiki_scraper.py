@@ -59,9 +59,8 @@ def scrape_event_info(event_id):
                         period = col
                         break
             
-            # Normalize dates
-            period = period.replace("~", " ～ ").strip()
-            period = re.sub(r'\s*～\s*', ' ～ ', period)
+            # Normalize dates to half-width tilde
+            period = re.sub(r'\s*[~～〜]\s*', ' ~ ', period).strip()
             return boss, period
             
     return None

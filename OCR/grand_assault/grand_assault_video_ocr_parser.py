@@ -63,7 +63,7 @@ def check_and_register_season(target_event_id):
         if not boss or not period:
             print("[INFO] 手動でイベント情報を登録します。")
             boss = input("ボス名を入力してください (例: ビナー): ").strip()
-            period = input("開催期間を入力してください (例: 2026/07/15 ～ 2026/07/22): ").strip()
+            period = input("開催期間を入力してください (例: 2026/07/15 ~ 2026/07/22): ").strip()
             
         # 地形、装甲、Torment装甲の手動入力または確認
         field = input("地形を入力してください (例: 屋内, 屋外, 市街地): ").strip()
