@@ -110,7 +110,7 @@ def run_ocr_pipeline():
     # OCRと補完が完了した後、GitHubへアップロードするか確認
     choice = input("\n[PROMPT] このまま続けてGitHubへデータをアップデートしますか？ (y/n): ").strip().lower()
     if choice == 'y':
-        push_to_github()
+        push_to_github(confirm=False)
 
 
 
@@ -257,7 +257,7 @@ def merge_ocr_results():
     # GitHub push の確認
     choice = input("\n[PROMPT] このまま続けてGitHubへデータをアップデートしますか？ (y/n): ").strip().lower()
     if choice == 'y':
-        push_to_github()
+        push_to_github(confirm=False)
 
 
 
@@ -324,18 +324,18 @@ def patch_existing_data():
         # 補完が完了した後、GitHubへアップロードするか確認
         choice = input("\n[PROMPT] このまま続けてGitHubへデータをアップデートしますか？ (y/n): ").strip().lower()
         if choice == 'y':
-            push_to_github()
+            push_to_github(confirm=False)
     except Exception as e:
         print(f"[ERROR] データの処理中にエラーが発生しました: {e}")
 
 
 
-def push_to_github():
+def push_to_github(commit_msg="update rank data", confirm=True):
     """
     gitコマンドを使って数値データをGitHubへ自動アップデートします。
     """
     print("\n" + "="*50)
-    print(" 3. GitHubへの数値データの自動アップデート")
+    print(" GitHubへの数値データの自動アップデート")
     print("="*50)
     
     # gitがインストールされているか確認
@@ -349,10 +349,11 @@ def push_to_github():
     print("[INFO] git status を確認しています...")
     subprocess.run(["git", "status", "rank_data/"])
     
-    choice = input("\n変更されたParquetデータをGitHubへプッシュしますか？ (y/n): ").strip().lower()
-    if choice != 'y':
-        print("[INFO] アップデートをキャンセルしました。")
-        return
+    if confirm:
+        choice = input("\n変更されたParquetデータをGitHubへプッシュしますか？ (y/n): ").strip().lower()
+        if choice != 'y':
+            print("[INFO] アップデートをキャンセルしました。")
+            return
         
     try:
         # add
@@ -368,11 +369,8 @@ def push_to_github():
             print("\n[INFO] コミット対象の新しい数値データ（Parquet）の変更はありませんでした。")
             return
             
-        # commit
-        commit_msg = input("コミットメッセージを入力してください (デフォルト: 'update rank data'): ").strip()
-        if not commit_msg:
-            commit_msg = "update rank data"
-        print("[INFO] コミットしています (git commit)...")
+        # commit (自動コミットメッセージ使用)
+        print(f"[INFO] コミットしています (git commit -m '{commit_msg}')...")
         subprocess.run(["git", "commit", "-m", commit_msg], check=True)
         
         # push
@@ -796,7 +794,7 @@ def input_boundary_ranks_flow():
     # GitHub反映
     choice = input("\n[PROMPT] このまま続けてGitHubへデータをアップデートしますか？ (y/n): ").strip().lower()
     if choice == 'y':
-        push_to_github()
+        push_to_github(confirm=False)
 
 
 def main_menu():
