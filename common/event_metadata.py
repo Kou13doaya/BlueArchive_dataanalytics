@@ -26,6 +26,7 @@ EVENT_META = {
     "grand_assault_32": {"season": "S32", "boss": "ペロロジラ", "period": "2026/04/08 ~ 2026/04/15", "field": "屋外", "armors": ["重装甲", "特殊装甲", "弾力装甲"], "torment_armors": ["重装甲", "特殊装甲"]},
     "grand_assault_33": {"season": "S33", "boss": "クロカゲ", "period": "2026/05/13 ~ 2026/05/20", "field": "市街地", "armors": ["軽装備", "弾力装甲", "特殊装甲"], "torment_armors": ["軽装備", "特殊装甲"]},
     "grand_assault_34": {"season": "S34", "boss": "ホバークラフト", "period": "2026/06/17 ~ 2026/06/24", "field": "屋外", "armors": ["軽装備", "特殊装甲", "弾力装甲"], "torment_armors": ["特殊装甲", "弾力装甲"]},
+    "grand_assault_35": {"season": "S35", "boss": "ホド", "period": "2026/07/15 ～ 2026/07/22", "field": "屋内", "armors": ["重装甲", "弾力装甲", "軽装備"], "torment_armors": ["重装甲", "弾力装甲"]},
 }
 
 diff_translation = {
@@ -97,7 +98,7 @@ def get_display_name(event_id):
         return f"S{match_legacy.group(2)}"
     return event_id
 
-def register_new_event(event_id, season, boss, period, field=""):
+def register_new_event(event_id, season, boss, period, field="", armors=None, torment_armors=None):
     """
     event_metadata.py の EVENT_META に新しいイベントメタデータを追加します。
     """
@@ -117,7 +118,14 @@ def register_new_event(event_id, season, boss, period, field=""):
     if match:
         prefix = match.group(1)
         suffix = match.group(2)
-        new_entry = f'\n    "{event_id}": {{"season": "{season}", "boss": "{boss}", "period": "{period}", "field": "{field}"}},'
+        
+        if "grand_assault" in event_id:
+            armors_str = ", ".join([f'"{a}"' for a in armors]) if armors else ""
+            torment_str = ", ".join([f'"{a}"' for a in torment_armors]) if torment_armors else ""
+            new_entry = f'\n    "{event_id}": {{"season": "{season}", "boss": "{boss}", "period": "{period}", "field": "{field}", "armors": [{armors_str}], "torment_armors": [{torment_str}]}},'
+        else:
+            new_entry = f'\n    "{event_id}": {{"season": "{season}", "boss": "{boss}", "period": "{period}", "field": "{field}"}},'
+            
         updated_meta = prefix + new_entry + "\n" + suffix
         new_content = content.replace(match.group(0), updated_meta, 1)
         
@@ -125,7 +133,13 @@ def register_new_event(event_id, season, boss, period, field=""):
             f.write(new_content)
         
         # グローバル変数にも反映
-        EVENT_META[event_id] = {"season": season, "boss": boss, "period": period, "field": field}
+        meta_data = {"season": season, "boss": boss, "period": period, "field": field}
+        if "grand_assault" in event_id:
+            if armors:
+                meta_data["armors"] = armors
+            if torment_armors:
+                meta_data["torment_armors"] = torment_armors
+        EVENT_META[event_id] = meta_data
         return True
     return False
 
