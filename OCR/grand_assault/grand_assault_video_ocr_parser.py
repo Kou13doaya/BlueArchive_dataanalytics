@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import argparse
+from collections import Counter
 
 # Add project root and current directory to sys.path to allow running from any directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -573,7 +574,11 @@ class VideoOCRParser:
         # Resolve final score for each rank
         final_results = []
         for rank, scores in sorted(aggregated_data.items()):
-            most_common_score = max(set(scores), key=scores.count)
+            counts = Counter(scores)
+            max_count = max(counts.values())
+            candidates = [s for s, c in counts.items() if c == max_count]
+            # When counts tie, prioritize the score with the maximum digit length (to prevent truncated digit dropouts)
+            most_common_score = max(candidates, key=lambda s: (len(str(s)), s))
             final_results.append({'rank': rank, 'score': most_common_score})
             
         return final_results
