@@ -90,10 +90,16 @@ python run_analysis.py --event grand_assault_34 --mode Mid
 │   └── wiki_scraper.py         # ★ ブルアカWikiから新シーズン情報を自動取得するスクレイパー
 │
 ├── OCR/                        # OCR（画像・動画認識）に関連するモジュール
-│   ├── ocr_engine.py           # テンプレートマッチングによる画像解析エンジン
-│   ├── ocr_parser.py           # EasyOCRを用いた画像パーサー
-│   ├── video_ocr_parser.py     # スクロール動画からデータを抽出するパーサー
-│   │                             （新シーズン自動登録・欠損データ対話補完・複数動画統合機能を内包）
+│   ├── total_assault/          # 【総力戦専用】OCRモジュール
+│   │   ├── total_assault_ocr_engine.py      # テンプレートマッチングによる画像解析エンジン
+│   │   ├── total_assault_ocr_parser.py      # EasyOCRによる補助画像パーサー
+│   │   └── total_assault_video_ocr_parser.py# スクロール動画解析・欠損補完・統合パーサー
+│   │
+│   ├── grand_assault/          # 【大決戦専用】OCRモジュール
+│   │   ├── grand_assault_ocr_engine.py      # 8/9桁自動補正搭載テンプレートマッチングエンジン
+│   │   ├── grand_assault_ocr_parser.py      # EasyOCRによる補助画像パーサー
+│   │   └── grand_assault_video_ocr_parser.py# タイ解釈ロジック内蔵スクロール動画解析パーサー
+│   │
 │   ├── build_templates.py      # テンプレート画像作成スクリプト
 │   ├── binarize_templates.py   # テンプレート二値化前処理スクリプト
 │   ├── ocr_specification.md    # OCRシステムの設計・高速化仕様書
