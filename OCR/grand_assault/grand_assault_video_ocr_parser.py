@@ -230,11 +230,13 @@ def merge_dataframes(df_a: pd.DataFrame, df_b: pd.DataFrame) -> pd.DataFrame:
             stb = status_b.get(r, None)
             pa = get_priority(sta)
             pb = get_priority(stb)
+            sta_eff = sta if sta is not None else 'ocr'
+            stb_eff = stb if stb is not None else 'ocr'
 
             if sa == sb:
                 merged[r] = sa
                 # 優先度の高いステータスを採用
-                merged_status[r] = sta if pa >= pb else stb
+                merged_status[r] = sta if pa > pb else (stb if pb > pa else sta_eff)
             else:
                 # スコア不一致
                 if pa > pb:
@@ -250,12 +252,10 @@ def merge_dataframes(df_a: pd.DataFrame, df_b: pd.DataFrame) -> pd.DataFrame:
                     conflicts.append(r)
         elif r in scores_a:
             merged[r] = scores_a[r]
-            if r in status_a:
-                merged_status[r] = status_a[r]
+            merged_status[r] = status_a.get(r, 'ocr')
         else:
             merged[r] = scores_b[r]
-            if r in status_b:
-                merged_status[r] = status_b[r]
+            merged_status[r] = status_b.get(r, 'ocr')
 
     if conflicts:
         print(f"\n[INFO] 重複区間に {len(conflicts)} 件のスコア不一致が見つかりました。")
