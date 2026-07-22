@@ -89,7 +89,7 @@ def interactive_patch_missing_data(df_save):
     while True:
         if has_status:
             # status が 'missing_interval' 以外の欠損行のみを抽出
-            missing_ranks = df_save[df_save['score'].isna() & (df_save['status'] != 'missing_interval')].index.tolist()
+            missing_ranks = df_save[df_save['score'].isna() & (df_save['status'].fillna('') != 'missing_interval')].index.tolist()
         else:
             missing_ranks = df_save[df_save['score'].isna()].index.tolist()
             
