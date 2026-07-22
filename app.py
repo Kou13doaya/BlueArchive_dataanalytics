@@ -295,7 +295,7 @@ else:
 # ----------------------------------------------------
 if not event_id:
     st.markdown('<div class="main-title">Blue Archive Data Analytics</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">総力戦・大決戦データ分析ツール (Preview4)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">総力戦・大決戦データ分析ツール (Preview5)</div>', unsafe_allow_html=True)
     # ====================================================
     # A. ポータル画面: 総力戦・大決戦ポータル
     # ====================================================
