@@ -15,7 +15,6 @@ EVENT_META = {
     "total_assault_88": {"season": "S88", "boss": "KAITEN FX Mk.0", "period": "2026/04/29 ~ 2026/05/06", "field": "市街地"},
     "total_assault_89": {"season": "S89", "boss": "ドラム缶ガニ", "period": "2026/06/03 ~ 2026/06/10", "field": "市街地"},
     "total_assault_90": {"season": "S90", "boss": "グレゴリオ", "period": "2026/07/01 ~ 2026/07/08", "field": "屋内"},
-    "total_assault_00": {"season": "S00", "boss": "Sample", "period": "20XX/XX/XX ~ 20XX/XX/XX", "field": "屋内"},
     "grand_assault_25": {"season": "S25", "boss": "ビナー", "period": "2025/08/13 ~ 2025/08/20", "field": "市街地", "armors": ["軽装備", "特殊装甲", "弾力装甲"], "torment_armors": ["弾力装甲"]},
     "grand_assault_26": {"season": "S26", "boss": "ケセド", "period": "2025/09/10 ~ 2025/09/17", "field": "屋外", "armors": ["軽装備", "重装甲", "弾力装甲"], "torment_armors": ["弾力装甲"]},
     "grand_assault_27": {"season": "S27", "boss": "シロ＆クロ", "period": "2025/10/15 ~ 2025/10/22", "field": "屋内", "armors": ["軽装備", "特殊装甲", "弾力装甲"], "torment_armors": ["軽装備", "弾力装甲"]},
