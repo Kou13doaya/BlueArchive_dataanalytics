@@ -736,7 +736,7 @@ else:
         f"<h3 style='margin: 0; font-weight: bold; text-align: center; line-height: 1.1;'>"
         f"総参加者数 {participants_str}"
         f"</h3>"
-        f"<div style='position: absolute; right: 5px; bottom: 2px; font-size: 0.82rem; color: #888; font-weight: 500;'>"
+        f"<div style='position: absolute; right: 5px; bottom: -6px; font-size: 0.82rem; color: #888; font-weight: 500;'>"
         f"取得データ数 {ocr_count_str}"
         f"</div>"
         f"</div>",
