@@ -440,7 +440,7 @@ if not event_id:
     # st.markdown("<p style='color: #888; font-size: 1.0rem; margin-top: -5px; margin-bottom: 20px;'>過去に開催された総力戦・大決戦の統計ダッシュボード一覧</p>", unsafe_allow_html=True)
     
     # 検索窓とカテゴリ切り替えを横並びに配置
-    col_search, col_tabs = st.columns([1, 1])
+    col_search, col_tabs = st.columns([1, 1], vertical_alignment="center")
     with col_search:
         search_query = st.text_input(
             "ボス検索",
@@ -450,7 +450,6 @@ if not event_id:
             key="portal_search_input"
         )
     with col_tabs:
-        st.write('<div style="height: 10px;"></div>', unsafe_allow_html=True)
         portal_tab = st.radio(
             "表示カテゴリ:",
             ["すべて", "総力戦", "大決戦"],
