@@ -729,10 +729,17 @@ else:
             total_participants = total_rows.index.max()
 
     participants_str = f"{total_participants:,} 人" if total_participants is not None else "ー"
+    ocr_count_str = f"{total_ocr_count:,} 人"
+    
     st.markdown(
-        f"<h3 style='text-align: center; font-weight: bold; margin-top: 0px; margin-bottom: 0px; padding: 0; line-height: 1.1;'>"
+        f"<div style='position: relative; display: flex; align-items: center; justify-content: center; margin-top: 5px; margin-bottom: 5px; min-height: 32px;'>"
+        f"<h3 style='margin: 0; font-weight: bold; text-align: center; line-height: 1.1;'>"
         f"総参加者数 {participants_str}"
-        f"</h3>",
+        f"</h3>"
+        f"<div style='position: absolute; right: 5px; bottom: 2px; font-size: 0.82rem; color: #888; font-weight: 500;'>"
+        f"取得データ数 {ocr_count_str}"
+        f"</div>"
+        f"</div>",
         unsafe_allow_html=True
     )
     st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
