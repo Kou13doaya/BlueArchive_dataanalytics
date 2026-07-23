@@ -238,7 +238,13 @@ def make_grand_assault_summary(df, event_id=None):
             return 'Other'
         return '・'.join(difficulty_map.get(char, char) for char in name)
 
-    counts = df['score'].apply(get_bracket).value_counts()
+    # 集計対象を ocr 実測データのみに絞り込む（手動境界 boundary_* や 欠損 missing_interval、Other を除外）
+    if 'status' in df.columns:
+        target_df = df[df['status'] == 'ocr']
+    else:
+        target_df = df[df['score'].notna()]
+
+    counts = target_df['score'].apply(get_bracket).value_counts()
 
     summary_data = []
     cumulative_count = 0
@@ -252,15 +258,6 @@ def make_grand_assault_summary(df, event_id=None):
                 "クリア人数 (単体)": f"{count:,} 人",
                 "クリア人数 (累積)": f"{cumulative_count:,} 人"
             })
-
-    other_count = counts.get('Other', 0)
-    if other_count > 0:
-        cumulative_count += other_count
-        summary_data.append({
-            "難易度": "Other",
-            "クリア人数 (単体)": f"{other_count:,} 人",
-            "クリア人数 (累積)": f"{cumulative_count:,} 人"
-        })
 
     if not summary_data:
         return pd.DataFrame([{"難易度": "データなし", "クリア人数 (単体)": "0 人", "クリア人数 (累積)": "0 人"}])
