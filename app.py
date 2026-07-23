@@ -630,9 +630,18 @@ else:
             armor_html += f'<span style="background-color: {color}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">{label}</span>'
         armor_html += '</div>'
         
+    is_total = normalize_event_id(event_id).startswith("total_assault_")
+    type_label = "総力戦" if is_total else "大決戦"
+    badge_color = "#3b82f6" if is_total else "#10b981"
+
     title_html = f"""
     <div style="margin-bottom: 20px;">
-        <div style="font-size: 0.95rem; color: #94a3b8; font-weight: normal; margin-bottom: 4px;">{season_num} {period}</div>
+        <div style="font-size: 0.95rem; color: #94a3b8; font-weight: normal; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+            <span style="background-color: {badge_color}; color: white; padding: 2px 7px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; line-height: 1;">{type_label}</span>
+            <span>{season_num}</span>
+            <span style="color: #64748b;">|</span>
+            <span>{period}</span>
+        </div>
         <div style="font-size: 1.75rem; font-weight: bold; color: #f8fafc; display: flex; align-items: center; gap: 15px;">
             <span>{boss_name}</span>
             {field_img_html}
