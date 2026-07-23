@@ -355,10 +355,11 @@ if not event_id:
         }
         .card-badge {
             color: white;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.72rem;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 0.68rem;
             font-weight: bold;
+            line-height: 1.2;
         }
         .card-period {
             color: #94a3b8;
