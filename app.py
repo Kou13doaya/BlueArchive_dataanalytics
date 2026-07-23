@@ -500,81 +500,83 @@ if not event_id:
             
         display_events.append(eid)
         
-    # 4列 of グリッドでカードを描画
+    # 4列 of グリッドでカードを描画（スマホ等での縦並び時も時系列順が保持されるよう1行ごとにcolumnsを生成）
     if display_events:
-        cols = st.columns(4)
-        for i, eid in enumerate(display_events):
-            col = cols[i % 4]
-            meta = EVENT_META.get(normalize_event_id(eid), {})
-            boss_name = meta.get("boss", "Unknown")
-            season_num = meta.get("season", eid)
-            period = meta.get("period", "")
-            is_total = normalize_event_id(eid).startswith("total_assault_")
-            
-            # 最新のサフィックス（時期）を取得してボーダースコア算出に使用する
-            suffixes = event_suffix_map.get(eid, [])
-            latest_suffix = suffixes[0] if suffixes else None
-            
-            total_players, plat_score_portal, plat_time_str = get_portal_card_stats(eid, suffix=latest_suffix)
+        for row_idx in range(0, len(display_events), 4):
+            row_events = display_events[row_idx:row_idx + 4]
+            cols = st.columns(4)
+            for col_idx, eid in enumerate(row_events):
+                col = cols[col_idx]
+                meta = EVENT_META.get(normalize_event_id(eid), {})
+                boss_name = meta.get("boss", "Unknown")
+                season_num = meta.get("season", eid)
+                period = meta.get("period", "")
+                is_total = normalize_event_id(eid).startswith("total_assault_")
                 
-            plat_score_str_portal = f"{int(plat_score_portal):,}" if plat_score_portal is not None else "ー"
+                # 最新のサフィックス（時期）を取得してボーダースコア算出に使用する
+                suffixes = event_suffix_map.get(eid, [])
+                latest_suffix = suffixes[0] if suffixes else None
+                
+                total_players, plat_score_portal, plat_time_str = get_portal_card_stats(eid, suffix=latest_suffix)
+                    
+                plat_score_str_portal = f"{int(plat_score_portal):,}" if plat_score_portal is not None else "ー"
 
-            # 最終更新情報表示用の文字列を作成
-            if latest_suffix == "last":
-                update_status_str = "最終結果"
-            elif latest_suffix == "":
-                update_status_str = ""
-            else:
-                match_dt = re.match(r"^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})$", latest_suffix)
-                if match_dt:
-                    update_status_str = f"最終更新日: {match_dt.group(1)}/{match_dt.group(2)}/{match_dt.group(3)} {match_dt.group(4)}:{match_dt.group(5)}"
+                # 最終更新情報表示用の文字列を作成
+                if latest_suffix == "last":
+                    update_status_str = "最終結果"
+                elif latest_suffix == "":
+                    update_status_str = ""
                 else:
-                    update_status_str = f"最終更新日: {latest_suffix}"
+                    match_dt = re.match(r"^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})$", latest_suffix)
+                    if match_dt:
+                        update_status_str = f"最終更新日: {match_dt.group(1)}/{match_dt.group(2)}/{match_dt.group(3)} {match_dt.group(4)}:{match_dt.group(5)}"
+                    else:
+                        update_status_str = f"最終更新日: {latest_suffix}"
 
-            with col:
-                badge_color = "#3b82f6" if is_total else "#10b981"
-                type_label = "総力戦" if is_total else "大決戦"
-                
-                field_val = meta.get("field", "")
-                if field_val == "屋内":
-                    field_img_base64 = indoor_base64
-                elif field_val == "屋外":
-                    field_img_base64 = outdoor_base64
-                elif field_val == "市街地":
-                    field_img_base64 = urban_base64
-                else:
-                    field_img_base64 = ""
-                
-                if field_img_base64:
-                    field_img_html = f'<img src="data:image/png;base64,{field_img_base64}" style="width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; margin-left: 4px;" title="{field_val}" />'
-                else:
-                    field_img_html = ''
-                
-                # ボス選択画面用の装甲バッジ（「対象装甲:」の文字は不要）
-                armors = meta.get("armors", [])
-                armor_badges_html = ""
-                if not is_total and armors:
-                    armor_badges_html = '<div style="display: flex; gap: 4px; margin-top: 3px; flex-wrap: wrap;">'
-                    for a in armors:
-                        color = "#a855f7" # 弾力装甲
-                        if a == "軽装備":
-                            color = "#ef4444"
-                        elif a == "重装甲":
-                            color = "#eab308"
-                        elif a == "特殊装甲":
-                            color = "#3b82f6"
-                        armor_badges_html += f'<span style="background-color: {color}; color: white; padding: 1px 5px; border-radius: 3px; font-size: 0.65rem; font-weight: bold; white-space: nowrap;">{a}</span>'
-                    armor_badges_html += '</div>'
-                
-                if is_total:
-                    info_bottom_html = f"<div class='card-border-time'>{plat_time_str}</div>" if plat_time_str else "<div class='card-border-time-placeholder'></div>"
-                else:
-                    info_bottom_html = armor_badges_html if armor_badges_html else "<div class='card-border-time-placeholder'></div>"
-                
-                status_html = f"<div style='color: #94a3b8; font-size: 0.72rem; margin-top: 5px;'>{update_status_str}</div>" if update_status_str else ""
-                
-                card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a><div><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-title-row"><div style="display: flex; align-items: baseline; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="card-season">{season_num}</span><span class="card-boss">{boss_name}</span></div>{field_img_html}</div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-score">{plat_score_str_portal}</div>{info_bottom_html}</div></div>{status_html}</div></div>"""
-                st.markdown(card_html, unsafe_allow_html=True)
+                with col:
+                    badge_color = "#3b82f6" if is_total else "#10b981"
+                    type_label = "総力戦" if is_total else "大決戦"
+                    
+                    field_val = meta.get("field", "")
+                    if field_val == "屋内":
+                        field_img_base64 = indoor_base64
+                    elif field_val == "屋外":
+                        field_img_base64 = outdoor_base64
+                    elif field_val == "市街地":
+                        field_img_base64 = urban_base64
+                    else:
+                        field_img_base64 = ""
+                    
+                    if field_img_base64:
+                        field_img_html = f'<img src="data:image/png;base64,{field_img_base64}" style="width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; margin-left: 4px;" title="{field_val}" />'
+                    else:
+                        field_img_html = ''
+                    
+                    # ボス選択画面用の装甲バッジ（「対象装甲:」の文字は不要）
+                    armors = meta.get("armors", [])
+                    armor_badges_html = ""
+                    if not is_total and armors:
+                        armor_badges_html = '<div style="display: flex; gap: 4px; margin-top: 3px; flex-wrap: wrap;">'
+                        for a in armors:
+                            color = "#a855f7" # 弾力装甲
+                            if a == "軽装備":
+                                color = "#ef4444"
+                            elif a == "重装甲":
+                                color = "#eab308"
+                            elif a == "特殊装甲":
+                                color = "#3b82f6"
+                            armor_badges_html += f'<span style="background-color: {color}; color: white; padding: 1px 5px; border-radius: 3px; font-size: 0.65rem; font-weight: bold; white-space: nowrap;">{a}</span>'
+                        armor_badges_html += '</div>'
+                    
+                    if is_total:
+                        info_bottom_html = f"<div class='card-border-time'>{plat_time_str}</div>" if plat_time_str else "<div class='card-border-time-placeholder'></div>"
+                    else:
+                        info_bottom_html = armor_badges_html if armor_badges_html else "<div class='card-border-time-placeholder'></div>"
+                    
+                    status_html = f"<div style='color: #94a3b8; font-size: 0.72rem; margin-top: 5px;'>{update_status_str}</div>" if update_status_str else ""
+                    
+                    card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a><div><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-title-row"><div style="display: flex; align-items: baseline; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="card-season">{season_num}</span><span class="card-boss">{boss_name}</span></div>{field_img_html}</div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-info-score">{plat_score_str_portal}</div>{info_bottom_html}</div></div>{status_html}</div></div>"""
+                    st.markdown(card_html, unsafe_allow_html=True)
     else:
         st.info("該当するシーズンが見つかりませんでした。")
 
