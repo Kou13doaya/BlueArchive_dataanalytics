@@ -346,11 +346,11 @@ if not event_id:
             background-color: rgba(128, 128, 128, 0.08) !important;
             border: 1px solid rgba(128, 128, 128, 0.22) !important;
             border-radius: 6px;
-            padding: 14px 18px; /* 余白を引き締める */
+            padding: 7px 18px; /* 上下内側余白を半分に縮小 */
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            min-height: 145px; /* 縦幅をコンパクトにして余白を詰める */
+            min-height: 125px; /* 縦幅を引き締める */
             margin-bottom: 8px !important; /* 縦並び時のカード間の下マージン */
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
             transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
