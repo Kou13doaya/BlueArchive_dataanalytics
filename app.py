@@ -343,21 +343,23 @@ if not event_id:
             box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.25), 0 4px 6px -4px rgba(59, 130, 246, 0.25);
         }
         
-        /* ボス背景画像オーバーレイ (拡大表示設定) */
-        .portal-card-boss-bg {
-            position: absolute;
-            right: 0;
-            top: 0;
-            height: 100%;
-            width: 85%; /* カード幅の85%まで大きく拡大 */
+        /* 案1: サークル (丸型ボスバッジ) アイコン */
+        .boss-circle-badge {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
             object-fit: cover;
-            object-position: right top; /* 右上基準で立ち絵を迫力大で表示 */
-            opacity: 0.50; /* ボス画像をよりハッキリと見せる */
-            pointer-events: none;
-            border-top-right-radius: 8px;
-            border-bottom-right-radius: 8px;
-            mask-image: linear-gradient(to left, rgba(0,0,0,1) 35%, rgba(0,0,0,0) 100%);
-            -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 35%, rgba(0,0,0,0) 100%);
+            object-position: center top;
+            border: 2px solid rgba(59, 130, 246, 0.45);
+            background-color: rgba(0, 0, 0, 0.15);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            flex-shrink: 0;
+            margin-left: 8px;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+        .portal-card:hover .boss-circle-badge {
+            transform: scale(1.08);
+            border-color: #3b82f6;
         }
         
         /* カード全体を覆う透明なアンカーリンク */
@@ -607,9 +609,9 @@ if not event_id:
                     status_html = f"<div class='card-status'>{update_status_str}</div>" if update_status_str else ""
                     
                     boss_b64 = get_boss_image_base64(boss_name)
-                    boss_bg_html = f'<img class="portal-card-boss-bg" src="data:image/webp;base64,{boss_b64}" />' if boss_b64 else ''
+                    boss_circle_html = f'<img class="boss-circle-badge" src="data:image/webp;base64,{boss_b64}" title="{boss_name}" />' if boss_b64 else ''
                     
-                    card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a>{boss_bg_html}<div style="position: relative; z-index: 2;"><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-title-row"><div style="display: flex; align-items: baseline; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="card-season">{season_num}</span><span class="card-boss">{boss_name}</span></div>{field_img_html}</div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-info-score">{plat_score_str_portal}</div>{info_bottom_html}</div></div>{status_html}</div></div>"""
+                    card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a><div><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-title-row"><div style="display: flex; align-items: baseline; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="card-season">{season_num}</span><span class="card-boss">{boss_name}</span></div>{field_img_html}</div><div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px;"><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-info-score">{plat_score_str_portal}</div>{info_bottom_html}</div></div>{boss_circle_html}</div>{status_html}</div></div>"""
                     st.markdown(card_html, unsafe_allow_html=True)
     else:
         st.info("該当するシーズンが見つかりませんでした。")
