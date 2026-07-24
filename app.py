@@ -305,6 +305,7 @@ if not event_id:
         /* columns のフレックスボックス折り返し設定 */
         div[data-testid="stHorizontalBlock"] {
             flex-wrap: wrap !important;
+            margin-bottom: 16px !important; /* 行同士の縦間隔を確保 */
         }
         div[data-testid="column"] {
             min-width: 215px !important;
@@ -323,6 +324,7 @@ if not event_id:
             flex-direction: column;
             justify-content: space-between;
             min-height: 145px; /* 縦幅をコンパクトにして余白を詰める */
+            margin-bottom: 16px !important; /* 縦並び時のカード間の下マージン */
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
             transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
             height: 100%;
