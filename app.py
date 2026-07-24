@@ -130,9 +130,28 @@ indoor_base64 = get_base64_image("image/indoor.png")
 outdoor_base64 = get_base64_image("image/outdoor.png")
 urban_base64 = get_base64_image("image/urban.png")
 
+BOSS_NAME_TO_KEY = {
+    "ビナー": "binah",
+    "ケセド": "chesed",
+    "ペロロジラ": "perorozilla",
+    "ホド": "hod",
+    "シロ＆クロ": "shirokuro",
+    "ヒエロニムス": "hieronymus",
+    "KAITEN FX Mk.0": "kaitenger",
+    "ゴズ": "goz",
+    "ホバークラフト": "hovercraft",
+    "クロカゲ": "kurokage",
+    "グレゴリオ": "gregorio",
+    "イェソド": "yesod",
+    "ドラム缶ガニ": "drumcrab"
+}
+
 @st.cache_data
 def get_boss_image_base64(boss_name):
-    path = os.path.join("image", "boss", f"{boss_name}.webp")
+    key = BOSS_NAME_TO_KEY.get(boss_name, "")
+    if not key:
+        return ""
+    path = os.path.join("image", "boss", f"{key}.webp")
     if os.path.exists(path):
         with open(path, "rb") as f:
             return base64.b64encode(f.read()).decode('utf-8')
