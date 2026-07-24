@@ -509,7 +509,7 @@ if not event_id:
         search_query = st.text_input(
             "ボス検索",
             value="",
-            placeholder="ボス名またはIDで検索 (例: ビナー, S90)",
+            placeholder="ボス名、ID、開催時期で検索 (例: ビナー, S90, 2026/07)",
             label_visibility="collapsed",
             key="portal_search_input"
         )
@@ -546,12 +546,24 @@ if not event_id:
         meta = EVENT_META.get(normalize_event_id(eid), {})
         boss = meta.get("boss", "").lower()
         season = meta.get("season", "").lower()
+        period = meta.get("period", "").lower()
         eid_lower = eid.lower()
         
-        # 検索マッチ
+        # 検索マッチ (ボス名、シーズン番号、イベントID、開催時期・日付に対応)
         q = search_query.strip().lower()
         if q:
-            if q not in boss and q not in season and q not in eid_lower:
+            q_clean = q.replace("年", "/").replace("月", "/").replace("日", "").strip("/")
+            period_clean = period.replace(" ", "")
+            
+            is_match = (
+                q in boss or 
+                q in season or 
+                q in eid_lower or 
+                q in period or 
+                q in period_clean or
+                (q_clean and (q_clean in period or q_clean in period_clean))
+            )
+            if not is_match:
                 continue
                 
         # カテゴリマッチ
