@@ -131,6 +131,14 @@ outdoor_base64 = get_base64_image("image/outdoor.png")
 urban_base64 = get_base64_image("image/urban.png")
 
 @st.cache_data
+def get_boss_image_base64(boss_name):
+    path = os.path.join("image", "boss", f"{boss_name}.webp")
+    if os.path.exists(path):
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode('utf-8')
+    return ""
+
+@st.cache_data
 def load_cached_data(event_id, suffix=None):
     """
     メモリ上にロード結果をキャッシュし、不要なディスク読み込みを防ぎます。
@@ -333,6 +341,23 @@ if not event_id:
             transform: translateY(-4px);
             border-color: #3b82f6 !important;
             box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.25), 0 4px 6px -4px rgba(59, 130, 246, 0.25);
+        }
+        
+        /* ボス背景画像オーバーレイ */
+        .portal-card-boss-bg {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            width: 60%;
+            object-fit: cover;
+            object-position: center top;
+            opacity: 0.38;
+            pointer-events: none;
+            border-top-right-radius: 8px;
+            border-bottom-right-radius: 8px;
+            mask-image: linear-gradient(to left, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 100%);
+            -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 100%);
         }
         
         /* カード全体を覆う透明なアンカーリンク */
@@ -581,7 +606,10 @@ if not event_id:
                     
                     status_html = f"<div class='card-status'>{update_status_str}</div>" if update_status_str else ""
                     
-                    card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a><div><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-title-row"><div style="display: flex; align-items: baseline; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="card-season">{season_num}</span><span class="card-boss">{boss_name}</span></div>{field_img_html}</div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-info-score">{plat_score_str_portal}</div>{info_bottom_html}</div></div>{status_html}</div></div>"""
+                    boss_b64 = get_boss_image_base64(boss_name)
+                    boss_bg_html = f'<img class="portal-card-boss-bg" src="data:image/webp;base64,{boss_b64}" />' if boss_b64 else ''
+                    
+                    card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a>{boss_bg_html}<div style="position: relative; z-index: 2;"><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-title-row"><div style="display: flex; align-items: baseline; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="card-season">{season_num}</span><span class="card-boss">{boss_name}</span></div>{field_img_html}</div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-info-score">{plat_score_str_portal}</div>{info_bottom_html}</div></div>{status_html}</div></div>"""
                     st.markdown(card_html, unsafe_allow_html=True)
     else:
         st.info("該当するシーズンが見つかりませんでした。")
