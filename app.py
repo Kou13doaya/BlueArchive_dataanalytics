@@ -340,57 +340,56 @@ if not event_id:
             margin-bottom: 8px !important; /* 上下のカード同士に間隔を持たせる */
         }
         
-        /* カード全体のアンカーリンクスタイル (透過背景・テキスト自動継承) */
+        /* ブルアカ公式UI風 平行四辺形ポータルカード */
         .portal-card {
             position: relative; /* 絶対配置リンクの基準点 */
             background-color: rgba(128, 128, 128, 0.08) !important;
-            border: 1px solid rgba(128, 128, 128, 0.2) !important;
-            border-radius: 8px;
-            padding: 14px; /* 余白を狭めて引き締める */
+            border: 1px solid rgba(128, 128, 128, 0.22) !important;
+            border-radius: 6px;
+            padding: 14px 18px; /* 余白を引き締める */
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             min-height: 145px; /* 縦幅をコンパクトにして余白を詰める */
             margin-bottom: 8px !important; /* 縦並び時のカード間の下マージン */
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
-            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+            transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
             height: 100%;
+            overflow: hidden;
+            transform: skewX(-10deg); /* カード外枠全体を平行四辺形に傾ける */
         }
         .portal-card:hover {
-            transform: translateY(-4px);
+            transform: skewX(-10deg) translateY(-4px); /* 斜めを維持したまま浮き上がる */
             border-color: #3b82f6 !important;
-            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.25), 0 4px 6px -4px rgba(59, 130, 246, 0.25);
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3), 0 4px 6px -4px rgba(59, 130, 246, 0.3);
         }
         
-        /* ブルアカ公式UI風 平行四辺形（斜めカット）ボスパネル */
-        .portal-card-slant-container {
+        /* カード内部テキスト・要素（傾きを逆補正して真っ直ぐ表示） */
+        .portal-card-content {
+            position: relative;
+            z-index: 2;
+            transform: skewX(10deg); /* カウンター補正でテキストをまっすぐ垂直表示 */
+        }
+        
+        /* ボス背景画像 (カード幅85%全域に拡大表示) */
+        .portal-card-boss-bg {
             position: absolute;
-            right: 8px;
-            top: 8px;
-            bottom: 8px;
-            width: 46%;
-            overflow: hidden;
-            border-radius: 6px;
-            transform: skewX(-12deg); /* 平行四辺形の斜めカット */
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-            pointer-events: none;
-            background-color: rgba(0, 0, 0, 0.25);
-        }
-        
-        .portal-card-slant-img {
-            width: 145%;
+            right: 0;
+            top: 0;
             height: 100%;
+            width: 85%; /* ボス画像をカード幅の85%まで大きく拡大 */
             object-fit: cover;
-            object-position: center top;
-            transform: skewX(12deg) scale(1.1); /* 画像自体の変形を反転して打ち消す */
-            opacity: 0.85;
+            object-position: right top; /* 右上基準で立ち絵を迫力大で表示 */
+            opacity: 0.48; /* ボス画像をくっきり見せる */
+            pointer-events: none;
+            transform: skewX(10deg) scale(1.15); /* 斜め外枠の反転補正＋拡大 */
+            mask-image: linear-gradient(to left, rgba(0,0,0,1) 35%, rgba(0,0,0,0) 100%);
+            -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 35%, rgba(0,0,0,0) 100%);
             transition: transform 0.3s ease, opacity 0.3s ease;
         }
-        
-        .portal-card:hover .portal-card-slant-img {
-            transform: skewX(12deg) scale(1.2);
-            opacity: 1.0;
+        .portal-card:hover .portal-card-boss-bg {
+            transform: skewX(10deg) scale(1.25);
+            opacity: 0.62;
         }
         
         /* カード全体を覆う透明なアンカーリンク */
@@ -640,9 +639,9 @@ if not event_id:
                     status_html = f"<div class='card-status'>{update_status_str}</div>" if update_status_str else ""
                     
                     boss_b64 = get_boss_image_base64(boss_name)
-                    boss_bg_html = f'<div class="portal-card-slant-container"><img class="portal-card-slant-img" src="data:image/webp;base64,{boss_b64}" /></div>' if boss_b64 else ''
+                    boss_bg_html = f'<img class="portal-card-boss-bg" src="data:image/webp;base64,{boss_b64}" />' if boss_b64 else ''
                     
-                    card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a>{boss_bg_html}<div style="position: relative; z-index: 2;"><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-title-row"><div style="display: flex; align-items: baseline; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="card-season">{season_num}</span><span class="card-boss">{boss_name}</span></div>{field_img_html}</div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-info-score">{plat_score_str_portal}</div>{info_bottom_html}</div></div>{status_html}</div></div>"""
+                    card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a>{boss_bg_html}<div class="portal-card-content"><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-title-row"><div style="display: flex; align-items: baseline; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="card-season">{season_num}</span><span class="card-boss">{boss_name}</span></div>{field_img_html}</div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-info-score">{plat_score_str_portal}</div>{info_bottom_html}</div></div>{status_html}</div></div>"""
                     st.markdown(card_html, unsafe_allow_html=True)
     else:
         st.info("該当するシーズンが見つかりませんでした。")
