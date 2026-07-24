@@ -312,25 +312,25 @@ if not event_id:
             margin-bottom: 16px !important; /* 上下のカード同士に間隔を持たせる */
         }
         
-        /* カード全体のアンカーリンクスタイル */
+        /* カード全体のアンカーリンクスタイル (デフォルト: ライトモード対応) */
         .portal-card {
             position: relative; /* 絶対配置リンクの基準点 */
-            background-color: var(--secondary-background-color, #1a202c); /* テーマ連動背景色 */
-            border: 1px solid rgba(128, 128, 128, 0.25);
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
             border-radius: 8px;
             padding: 14px; /* 余白を狭めて引き締める */
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             min-height: 145px; /* 縦幅をコンパクトにして余白を詰める */
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
             transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
             height: 100%;
         }
         .portal-card:hover {
             transform: translateY(-4px);
             border-color: #3b82f6;
-            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.25), 0 4px 6px -4px rgba(59, 130, 246, 0.25);
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.2), 0 4px 6px -4px rgba(59, 130, 246, 0.2);
         }
         
         /* カード全体を覆う透明なアンカーリンク */
@@ -362,8 +362,7 @@ if not event_id:
             line-height: 1.2;
         }
         .card-period {
-            color: var(--text-color, #94a3b8);
-            opacity: 0.7;
+            color: #64748b;
             font-size: 0.72rem;
             text-align: right;
             overflow: hidden;
@@ -381,13 +380,12 @@ if not event_id:
             min-height: 1.8rem;
         }
         .card-season {
-            color: var(--text-color, #94a3b8);
-            opacity: 0.7;
+            color: #64748b;
             font-size: 0.72rem;
             white-space: nowrap;
         }
         .card-boss {
-            color: var(--text-color, #f8fafc);
+            color: #0f172a;
             font-size: 1.25rem;
             font-weight: bold;
             line-height: 1.2;
@@ -413,14 +411,13 @@ if not event_id:
             flex-direction: column;
         }
         .card-border-score, .card-border-info-score {
-            color: var(--text-color, #f8fafc);
+            color: #0f172a;
             font-size: 1.15rem;
             font-weight: bold;
             line-height: 1.1;
         }
         .card-border-time {
-            color: var(--text-color, #cbd5e1);
-            opacity: 0.85;
+            color: #475569;
             font-size: 0.78rem;
             font-weight: bold;
             margin-top: 1px; /* マージンを詰める */
@@ -431,10 +428,49 @@ if not event_id:
         
         /* 参加者数 / 更新ステータス */
         .card-players, .card-status {
-            color: var(--text-color, #94a3b8);
-            opacity: 0.7;
+            color: #64748b;
             font-size: 0.72rem;
             margin-top: 5px;
+        }
+
+        /* ---------------------------------------------------- */
+        /* ダークモード設定時のスタイル切替 (CSS Media Query & Streamlit Attributes) */
+        /* ---------------------------------------------------- */
+        @media (prefers-color-scheme: dark) {
+            .portal-card {
+                background-color: #1a202c;
+                border-color: #2d3748;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+            }
+            .card-boss, .card-border-score, .card-border-info-score {
+                color: #f8fafc;
+            }
+            .card-period, .card-season, .card-players, .card-status {
+                color: #94a3b8;
+            }
+            .card-border-time {
+                color: #cbd5e1;
+            }
+        }
+
+        [data-theme="dark"] .portal-card,
+        .stApp[data-theme="dark"] .portal-card {
+            background-color: #1a202c !important;
+            border-color: #2d3748 !important;
+        }
+        [data-theme="dark"] .card-boss,
+        [data-theme="dark"] .card-border-score,
+        [data-theme="dark"] .card-border-info-score {
+            color: #f8fafc !important;
+        }
+        [data-theme="dark"] .card-period,
+        [data-theme="dark"] .card-season,
+        [data-theme="dark"] .card-players,
+        [data-theme="dark"] .card-status {
+            color: #94a3b8 !important;
+        }
+        [data-theme="dark"] .card-border-time {
+            color: #cbd5e1 !important;
         }
         </style>
     """, unsafe_allow_html=True)
