@@ -379,7 +379,7 @@ if not event_id:
             height: 100%;
             width: 85%; /* ボス画像をカード幅の85%まで大きく拡大 */
             object-fit: cover;
-            object-position: right top; /* 右上基準で立ち絵を迫力大で表示 */
+            object-position: right bottom; /* 右下基準で立ち絵・画像を配置 */
             opacity: 0.48; /* ボス画像をくっきり見せる */
             pointer-events: none;
             transform: skewX(10deg) scale(1.15); /* 斜め外枠の反転補正＋拡大 */
