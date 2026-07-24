@@ -343,21 +343,21 @@ if not event_id:
             box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.25), 0 4px 6px -4px rgba(59, 130, 246, 0.25);
         }
         
-        /* ボス背景画像オーバーレイ */
+        /* ボス背景画像オーバーレイ (拡大表示設定) */
         .portal-card-boss-bg {
             position: absolute;
             right: 0;
             top: 0;
             height: 100%;
-            width: 60%;
+            width: 85%; /* カード幅の85%まで大きく拡大 */
             object-fit: cover;
-            object-position: center top;
-            opacity: 0.38;
+            object-position: right top; /* 右上基準で立ち絵を迫力大で表示 */
+            opacity: 0.50; /* ボス画像をよりハッキリと見せる */
             pointer-events: none;
             border-top-right-radius: 8px;
             border-bottom-right-radius: 8px;
-            mask-image: linear-gradient(to left, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 100%);
-            -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 100%);
+            mask-image: linear-gradient(to left, rgba(0,0,0,1) 35%, rgba(0,0,0,0) 100%);
+            -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 35%, rgba(0,0,0,0) 100%);
         }
         
         /* カード全体を覆う透明なアンカーリンク */
