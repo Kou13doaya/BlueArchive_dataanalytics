@@ -312,11 +312,11 @@ if not event_id:
             margin-bottom: 16px !important; /* 上下のカード同士に間隔を持たせる */
         }
         
-        /* カード全体のアンカーリンクスタイル (デフォルト: ライトモード対応) */
+        /* カード全体のアンカーリンクスタイル (デフォルト: ライトモード) */
         .portal-card {
             position: relative; /* 絶対配置リンクの基準点 */
-            background-color: #ffffff;
-            border: 1px solid #e2e8f0;
+            background-color: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
             border-radius: 8px;
             padding: 14px; /* 余白を狭めて引き締める */
             display: flex;
@@ -329,7 +329,7 @@ if not event_id:
         }
         .portal-card:hover {
             transform: translateY(-4px);
-            border-color: #3b82f6;
+            border-color: #3b82f6 !important;
             box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.2), 0 4px 6px -4px rgba(59, 130, 246, 0.2);
         }
         
@@ -362,7 +362,7 @@ if not event_id:
             line-height: 1.2;
         }
         .card-period {
-            color: #64748b;
+            color: #64748b !important;
             font-size: 0.72rem;
             text-align: right;
             overflow: hidden;
@@ -380,12 +380,12 @@ if not event_id:
             min-height: 1.8rem;
         }
         .card-season {
-            color: #64748b;
+            color: #64748b !important;
             font-size: 0.72rem;
             white-space: nowrap;
         }
         .card-boss {
-            color: #0f172a;
+            color: #0f172a !important;
             font-size: 1.25rem;
             font-weight: bold;
             line-height: 1.2;
@@ -411,13 +411,13 @@ if not event_id:
             flex-direction: column;
         }
         .card-border-score, .card-border-info-score {
-            color: #0f172a;
+            color: #0f172a !important;
             font-size: 1.15rem;
             font-weight: bold;
             line-height: 1.1;
         }
         .card-border-time {
-            color: #475569;
+            color: #475569 !important;
             font-size: 0.78rem;
             font-weight: bold;
             margin-top: 1px; /* マージンを詰める */
@@ -428,31 +428,37 @@ if not event_id:
         
         /* 参加者数 / 更新ステータス */
         .card-players, .card-status {
-            color: #64748b;
+            color: #64748b !important;
             font-size: 0.72rem;
             margin-top: 5px;
         }
 
         /* ---------------------------------------------------- */
-        /* ダークモード設定時のスタイル切替 (CSS Media Query & Streamlit Attributes) */
+        /* 明示的なライトモード指定（Streamlit選択時） */
         /* ---------------------------------------------------- */
-        @media (prefers-color-scheme: dark) {
-            .portal-card {
-                background-color: #1a202c;
-                border-color: #2d3748;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
-            }
-            .card-boss, .card-border-score, .card-border-info-score {
-                color: #f8fafc;
-            }
-            .card-period, .card-season, .card-players, .card-status {
-                color: #94a3b8;
-            }
-            .card-border-time {
-                color: #cbd5e1;
-            }
+        [data-theme="light"] .portal-card,
+        .stApp[data-theme="light"] .portal-card {
+            background-color: #ffffff !important;
+            border-color: #e2e8f0 !important;
+        }
+        [data-theme="light"] .card-boss,
+        [data-theme="light"] .card-border-score,
+        [data-theme="light"] .card-border-info-score {
+            color: #0f172a !important;
+        }
+        [data-theme="light"] .card-period,
+        [data-theme="light"] .card-season,
+        [data-theme="light"] .card-players,
+        [data-theme="light"] .card-status {
+            color: #64748b !important;
+        }
+        [data-theme="light"] .card-border-time {
+            color: #475569 !important;
         }
 
+        /* ---------------------------------------------------- */
+        /* 明示的なダークモード指定（Streamlit選択時 または OSがダークでStreamlitがLight指定でない時） */
+        /* ---------------------------------------------------- */
         [data-theme="dark"] .portal-card,
         .stApp[data-theme="dark"] .portal-card {
             background-color: #1a202c !important;
