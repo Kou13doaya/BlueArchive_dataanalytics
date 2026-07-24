@@ -315,22 +315,22 @@ if not event_id:
         /* カード全体のアンカーリンクスタイル */
         .portal-card {
             position: relative; /* 絶対配置リンクの基準点 */
-            background-color: #1a202c; /* ダーク系のプレミアムな背景 */
-            border: 1px solid #2d3748;
+            background-color: var(--secondary-background-color, #1a202c); /* テーマ連動背景色 */
+            border: 1px solid rgba(128, 128, 128, 0.25);
             border-radius: 8px;
             padding: 14px; /* 余白を狭めて引き締める */
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             min-height: 145px; /* 縦幅をコンパクトにして余白を詰める */
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
             transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
             height: 100%;
         }
         .portal-card:hover {
             transform: translateY(-4px);
             border-color: #3b82f6;
-            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.2), 0 4px 6px -4px rgba(59, 130, 246, 0.2);
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.25), 0 4px 6px -4px rgba(59, 130, 246, 0.25);
         }
         
         /* カード全体を覆う透明なアンカーリンク */
@@ -362,7 +362,8 @@ if not event_id:
             line-height: 1.2;
         }
         .card-period {
-            color: #94a3b8;
+            color: var(--text-color, #94a3b8);
+            opacity: 0.7;
             font-size: 0.72rem;
             text-align: right;
             overflow: hidden;
@@ -380,12 +381,13 @@ if not event_id:
             min-height: 1.8rem;
         }
         .card-season {
-            color: #94a3b8;
+            color: var(--text-color, #94a3b8);
+            opacity: 0.7;
             font-size: 0.72rem;
             white-space: nowrap;
         }
         .card-boss {
-            color: #f8fafc;
+            color: var(--text-color, #f8fafc);
             font-size: 1.25rem;
             font-weight: bold;
             line-height: 1.2;
@@ -410,14 +412,15 @@ if not event_id:
             display: flex;
             flex-direction: column;
         }
-        .card-border-score {
-            color: #f8fafc;
+        .card-border-score, .card-border-info-score {
+            color: var(--text-color, #f8fafc);
             font-size: 1.15rem;
             font-weight: bold;
             line-height: 1.1;
         }
         .card-border-time {
-            color: #cbd5e1;
+            color: var(--text-color, #cbd5e1);
+            opacity: 0.85;
             font-size: 0.78rem;
             font-weight: bold;
             margin-top: 1px; /* マージンを詰める */
@@ -426,11 +429,12 @@ if not event_id:
             height: 1.0rem; /* 高さを詰める */
         }
         
-        /* 参加者数 */
-        .card-players {
-            color: #94a3b8;
-            font-size: 0.78rem;
-            margin-top: 2px;
+        /* 参加者数 / 更新ステータス */
+        .card-players, .card-status {
+            color: var(--text-color, #94a3b8);
+            opacity: 0.7;
+            font-size: 0.72rem;
+            margin-top: 5px;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -573,7 +577,7 @@ if not event_id:
                     else:
                         info_bottom_html = armor_badges_html if armor_badges_html else "<div class='card-border-time-placeholder'></div>"
                     
-                    status_html = f"<div style='color: #94a3b8; font-size: 0.72rem; margin-top: 5px;'>{update_status_str}</div>" if update_status_str else ""
+                    status_html = f"<div class='card-status'>{update_status_str}</div>" if update_status_str else ""
                     
                     card_html = f"""<div class="portal-card"><a href="?event_id={eid}" target="_self" class="portal-card-link-overlay"></a><div><div class="card-header"><span class="card-badge" style="background-color: {badge_color};">{type_label}</span><span class="card-period">{period}</span></div><div class="card-title-row"><div style="display: flex; align-items: baseline; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span class="card-season">{season_num}</span><span class="card-boss">{boss_name}</span></div>{field_img_html}</div><div class="card-border-area"><img class="card-border-img" src="data:image/png;base64,{platinum_base64}" /><div class="card-border-info"><div class="card-border-info-score">{plat_score_str_portal}</div>{info_bottom_html}</div></div>{status_html}</div></div>"""
                     st.markdown(card_html, unsafe_allow_html=True)
